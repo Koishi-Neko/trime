@@ -13,6 +13,7 @@ import com.osfans.trime.data.sync.DataStorageMode
 import com.osfans.trime.ime.candidates.compact.CompactCandidateMode
 import com.osfans.trime.ime.candidates.popup.PopupCandidatesLayout
 import com.osfans.trime.ime.candidates.popup.PopupCandidatesMode
+import com.osfans.trime.ime.candidates.syllable.SyllableCandidateDetector
 import com.osfans.trime.ime.composition.PopupPosition
 import com.osfans.trime.ime.core.InlinePreeditMode
 import com.osfans.trime.util.InputMethodUtils
@@ -347,11 +348,34 @@ class AppPrefs(
             const val MODE = "show_candidates_window"
             const val LAYOUT = "candidates_layout"
             const val POSITION = "candidates_window_position"
+            const val SYLLABLE_SIDEBAR = "syllable_sidebar"
+            const val SYLLABLE_TEXT_PATTERN = "syllable_text_pattern"
+            const val SYLLABLE_COMMENT_PATTERN = "syllable_comment_pattern"
         }
 
         val mode = enum(R.string.show_candidates_window, MODE, PopupCandidatesMode.DISABLED)
         val layout = enum(R.string.candidates_layout, LAYOUT, PopupCandidatesLayout.AUTOMATIC)
         val position = enum(R.string.candidates_window_position, POSITION, PopupPosition.BOTTOM_LEFT)
+
+        /**
+         * Moves the syllable candidates a T9-style scheme prepends to the list
+         * out of the candidate bar and into a vertical sidebar.
+         */
+        val syllableSidebar = switch(R.string.syllable_sidebar, SYLLABLE_SIDEBAR, true)
+
+        val syllableTextPattern = editText(
+            R.string.syllable_text_pattern,
+            SYLLABLE_TEXT_PATTERN,
+            SyllableCandidateDetector.DEFAULT_TEXT_PATTERN.pattern,
+            R.string.syllable_pattern_hint,
+        ) { syllableSidebar.getValue() }
+
+        val syllableCommentPattern = editText(
+            R.string.syllable_comment_pattern,
+            SYLLABLE_COMMENT_PATTERN,
+            SyllableCandidateDetector.DEFAULT_COMMENT_PATTERN.pattern,
+            R.string.syllable_pattern_hint,
+        ) { syllableSidebar.getValue() }
     }
 
     /**

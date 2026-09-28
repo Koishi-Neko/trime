@@ -189,6 +189,10 @@
     <string name="periodic_background_sync_interval">後台同步時間間隔（以分鐘為單位）</string>
     <string name="candidates_window">候选視窗</string>
     <string name="show_candidates_window">顯示候選詞視窗</string>
+    <string name="syllable_sidebar">音節側欄</string>
+    <string name="syllable_text_pattern">音節候選的文字規則</string>
+    <string name="syllable_comment_pattern">音節候選的註釋規則</string>
+    <string name="syllable_pattern_hint">正則表示式，需匹配整個文字。</string>
     <string name="general">常規</string>
     <string name="composing_text">預編輯碼</string>
     <string name="commit_text_preview">首選詞預覽</string>

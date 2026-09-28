@@ -190,6 +190,10 @@
     <string name="periodic_background_sync_interval">Interval of background syncing (in minutes)</string>
     <string name="candidates_window">Candidates Window</string>
     <string name="show_candidates_window">Show candidates window</string>
+    <string name="syllable_sidebar">Syllable sidebar</string>
+    <string name="syllable_text_pattern">Syllable text pattern</string>
+    <string name="syllable_comment_pattern">Syllable comment pattern</string>
+    <string name="syllable_pattern_hint">A regular expression matched against the whole value.</string>
     <string name="general">General</string>
     <string name="composing_text">Composing text</string>
     <string name="commit_text_preview">Commit text preview</string>
