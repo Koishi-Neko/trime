@@ -24,7 +24,8 @@ import org.kodein.di.DIAware
 import org.kodein.di.instance
 
 /**
- * The vertical list of syllable candidates docked to the left of the keyboard,
+ * The vertical list of syllable candidates, floating over the leftmost
+ * column of the keyboard (where the theme keeps its punctuation keys),
  * under the candidate bar.
  *
  * It is a plain sibling of the candidate bar: both react to the same
@@ -33,9 +34,12 @@ import org.kodein.di.instance
  * goes through the same `selectCandidate` call the bar uses, with the
  * candidate's global index.
  *
- * The view is `GONE` whenever there is nothing to show, and
- * [onVisibilityChanged] lets the input view give the keyboard the reclaimed
- * width back.
+ * The view overlays the keyboard rather than taking a column next to it:
+ * the keyboard keeps the exact bounds it has without the sidebar, and the
+ * sidebar is added after it so it draws on top and takes the touches in its
+ * bounds (its background is opaque, hiding the punctuation keys underneath).
+ * The view is `GONE` whenever there is nothing to show, which lets the
+ * touches reach the punctuation keys again.
  */
 class SyllableSidebarDelegate(override val di: DI) :
     DIAware,
@@ -45,12 +49,6 @@ class SyllableSidebarDelegate(override val di: DI) :
     private val scope: ThemeScope by instance()
 
     private val theme: Theme get() = scope.theme
-
-    /** Whether the sidebar currently takes up a column next to the keyboard. */
-    var isShowing: Boolean = false
-        private set
-
-    var onVisibilityChanged: ((Boolean) -> Unit)? = null
 
     private val adapter =
         SyllableSidebarViewAdapter(scope).apply {
@@ -68,6 +66,9 @@ class SyllableSidebarDelegate(override val di: DI) :
             layoutManager = LinearLayoutManager(context)
             isFocusable = false
             isFocusableInTouchMode = false
+            // keep touches in the column from falling through to the
+            // punctuation keys underneath
+            isClickable = true
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 defaultFocusHighlightEnabled = false
             }
@@ -97,10 +98,6 @@ class SyllableSidebarDelegate(override val di: DI) :
     override fun onCandidateListUpdate(data: Candidates.Bulk) {
         val syllables = SyllableCandidateRules.split(data.candidates).syllables
         adapter.updateCandidates(syllables, data.highlighted)
-        val show = syllables.isNotEmpty()
-        if (show == isShowing) return
-        isShowing = show
-        view.visibility = if (show) View.VISIBLE else View.GONE
-        onVisibilityChanged?.invoke(show)
+        view.visibility = if (syllables.isNotEmpty()) View.VISIBLE else View.GONE
     }
 }

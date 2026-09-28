@@ -185,10 +185,6 @@ class InputView(
         val receivers: List<InputBroadcastReceiver> by allInstances()
         receivers.forEach { broadcaster.addReceiver(it) }
 
-        // the sidebar appears and disappears with the candidate list, and the
-        // keyboard below has to take the column back when it goes away
-        syllableSidebar.onVisibilityChanged = { updateKeyboardSize() }
-
         windowManager.cacheResidentWindow(keyboardWindow, createView = true)
         windowManager.cacheResidentWindow(liquidWindow)
         // show KeyboardWindow by default
@@ -229,19 +225,24 @@ class InputView(
                     },
                 )
                 add(
+                    windowManager.view,
+                    lParams {
+                        below(inputBar.view)
+                        above(bottomPaddingSpace)
+                    },
+                )
+                // the sidebar overlays the keyboard's leftmost column (where
+                // the theme keeps its punctuation keys): added after the
+                // keyboard, it draws on top and takes the touches in its
+                // bounds, while the keyboard itself keeps exactly the bounds
+                // it has with the sidebar off
+                add(
                     syllableSidebar.view,
                     lParams(matchConstraints, matchConstraints) {
                         matchConstraintPercentWidth = SYLLABLE_SIDEBAR_WIDTH_RATIO
                         below(inputBar.view)
                         above(bottomPaddingSpace)
                         startOfParent()
-                    },
-                )
-                add(
-                    windowManager.view,
-                    lParams {
-                        below(inputBar.view)
-                        above(bottomPaddingSpace)
                     },
                 )
                 add(
@@ -294,10 +295,17 @@ class InputView(
             height = keyboardBottomPaddingPx
         }
         val sidePadding = keyboardSidePaddingPx
+        val unset = LayoutParams.UNSET
         if (sidePadding == 0) {
             // hide side padding space views when unnecessary
             leftPaddingSpace.visibility = View.GONE
             rightPaddingSpace.visibility = View.GONE
+            windowManager.view.updateLayoutParams<LayoutParams> {
+                startToEnd = unset
+                endToStart = unset
+                startOfParent()
+                endOfParent()
+            }
         } else {
             leftPaddingSpace.visibility = View.VISIBLE
             rightPaddingSpace.visibility = View.VISIBLE
@@ -307,42 +315,15 @@ class InputView(
             rightPaddingSpace.updateLayoutParams {
                 width = sidePadding
             }
-        }
-        updateKeyboardHorizontalBounds()
-        preedit.ui.root.setPadding(sidePadding, 0, sidePadding, 0)
-        inputBar.view.setPadding(sidePadding, 0, sidePadding, 0)
-    }
-
-    /**
-     * Places the keyboard window between the syllable sidebar and the right
-     * padding space while the sidebar shows, and restores the original bounds
-     * once it is gone.
-     */
-    private fun updateKeyboardHorizontalBounds() {
-        val sidePadding = keyboardSidePaddingPx
-        val unset = LayoutParams.UNSET
-        windowManager.view.updateLayoutParams<LayoutParams> {
-            startToStart = unset
-            endToEnd = unset
-            startToEnd = unset
-            endToStart = unset
-            when {
-                syllableSidebar.isShowing -> {
-                    startToEndOf(syllableSidebar.view)
-                    if (sidePadding == 0) endOfParent() else endToStartOf(rightPaddingSpace)
-                }
-
-                sidePadding == 0 -> {
-                    startOfParent()
-                    endOfParent()
-                }
-
-                else -> {
-                    startToEndOf(leftPaddingSpace)
-                    endToStartOf(rightPaddingSpace)
-                }
+            windowManager.view.updateLayoutParams<LayoutParams> {
+                startToStart = unset
+                endToEnd = unset
+                startToEndOf(leftPaddingSpace)
+                endToStartOf(rightPaddingSpace)
             }
         }
+        preedit.ui.root.setPadding(sidePadding, 0, sidePadding, 0)
+        inputBar.view.setPadding(sidePadding, 0, sidePadding, 0)
     }
 
     override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {
