@@ -103,6 +103,9 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         prefs.keyboard.hideKeyHint,
         prefs.keyboard.hideInputBar,
         prefs.advanced.ignoreSystemGestureInsets,
+        // the sidebar takes a column out of the keyboard, so it is part of the
+        // input view's layout rather than something it can be told at runtime
+        prefs.candidates.syllableSidebar,
     )
 
     private val themeScope: ThemeScope?

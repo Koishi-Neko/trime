@@ -30,6 +30,7 @@ import com.osfans.trime.ime.broadcast.InputBroadcastReceiver
 import com.osfans.trime.ime.broadcast.InputBroadcaster
 import com.osfans.trime.ime.candidates.compact.CompactCandidateDelegate
 import com.osfans.trime.ime.candidates.popup.PopupCandidatesMode
+import com.osfans.trime.ime.candidates.syllable.SyllableSidebarDelegate
 import com.osfans.trime.ime.composition.PreeditDelegate
 import com.osfans.trime.ime.keyboard.CommonKeyboardActionListener
 import com.osfans.trime.ime.keyboard.KeyboardPrefs.isLandscapeMode
@@ -55,6 +56,7 @@ import splitties.views.dsl.constraintlayout.constraintLayout
 import splitties.views.dsl.constraintlayout.endOfParent
 import splitties.views.dsl.constraintlayout.endToStartOf
 import splitties.views.dsl.constraintlayout.lParams
+import splitties.views.dsl.constraintlayout.matchConstraints
 import splitties.views.dsl.constraintlayout.startOfParent
 import splitties.views.dsl.constraintlayout.startToEndOf
 import splitties.views.dsl.constraintlayout.topOfParent
@@ -116,6 +118,7 @@ class InputView(
         bindSingleton { BoardWindowManager(di) }
         bindSingleton { InputBarDelegate(di) }
         bindSingleton { CompactCandidateDelegate(di) }
+        bindSingleton { SyllableSidebarDelegate(di) }
         bindSingleton { KeyboardWindow(di) }
         bindSingleton { LiquidWindow(di) }
     }
@@ -126,6 +129,7 @@ class InputView(
     private val preedit: PreeditDelegate by instance()
     private val windowManager: BoardWindowManager by instance()
     private val inputBar: InputBarDelegate by instance()
+    private val syllableSidebar: SyllableSidebarDelegate by instance()
     private val keyboardWindow: KeyboardWindow by instance()
     private val liquidWindow: LiquidWindow by instance()
 
@@ -171,6 +175,7 @@ class InputView(
         popup.refreshColors()
         keyboardWindow.refreshColors()
         inputBar.refreshColors()
+        syllableSidebar.refreshColors()
         preedit.refreshColors()
         windowManager.refreshColors()
     }
@@ -179,6 +184,10 @@ class InputView(
         // MUST call before any operation
         val receivers: List<InputBroadcastReceiver> by allInstances()
         receivers.forEach { broadcaster.addReceiver(it) }
+
+        // the sidebar appears and disappears with the candidate list, and the
+        // keyboard below has to take the column back when it goes away
+        syllableSidebar.onVisibilityChanged = { updateKeyboardSize() }
 
         windowManager.cacheResidentWindow(keyboardWindow, createView = true)
         windowManager.cacheResidentWindow(liquidWindow)
@@ -217,6 +226,15 @@ class InputView(
                         below(inputBar.view)
                         endOfParent()
                         bottomOfParent()
+                    },
+                )
+                add(
+                    syllableSidebar.view,
+                    lParams(matchConstraints, matchConstraints) {
+                        matchConstraintPercentWidth = SYLLABLE_SIDEBAR_WIDTH_RATIO
+                        below(inputBar.view)
+                        above(bottomPaddingSpace)
+                        startOfParent()
                     },
                 )
                 add(
@@ -276,17 +294,10 @@ class InputView(
             height = keyboardBottomPaddingPx
         }
         val sidePadding = keyboardSidePaddingPx
-        val unset = LayoutParams.UNSET
         if (sidePadding == 0) {
             // hide side padding space views when unnecessary
             leftPaddingSpace.visibility = View.GONE
             rightPaddingSpace.visibility = View.GONE
-            windowManager.view.updateLayoutParams<LayoutParams> {
-                startToEnd = unset
-                endToStart = unset
-                startOfParent()
-                endOfParent()
-            }
         } else {
             leftPaddingSpace.visibility = View.VISIBLE
             rightPaddingSpace.visibility = View.VISIBLE
@@ -296,15 +307,42 @@ class InputView(
             rightPaddingSpace.updateLayoutParams {
                 width = sidePadding
             }
-            windowManager.view.updateLayoutParams<LayoutParams> {
-                startToStart = unset
-                endToEnd = unset
-                startToEndOf(leftPaddingSpace)
-                endToStartOf(rightPaddingSpace)
-            }
         }
+        updateKeyboardHorizontalBounds()
         preedit.ui.root.setPadding(sidePadding, 0, sidePadding, 0)
         inputBar.view.setPadding(sidePadding, 0, sidePadding, 0)
+    }
+
+    /**
+     * Places the keyboard window between the syllable sidebar and the right
+     * padding space while the sidebar shows, and restores the original bounds
+     * once it is gone.
+     */
+    private fun updateKeyboardHorizontalBounds() {
+        val sidePadding = keyboardSidePaddingPx
+        val unset = LayoutParams.UNSET
+        windowManager.view.updateLayoutParams<LayoutParams> {
+            startToStart = unset
+            endToEnd = unset
+            startToEnd = unset
+            endToStart = unset
+            when {
+                syllableSidebar.isShowing -> {
+                    startToEndOf(syllableSidebar.view)
+                    if (sidePadding == 0) endOfParent() else endToStartOf(rightPaddingSpace)
+                }
+
+                sidePadding == 0 -> {
+                    startOfParent()
+                    endOfParent()
+                }
+
+                else -> {
+                    startToEndOf(leftPaddingSpace)
+                    endToStartOf(rightPaddingSpace)
+                }
+            }
+        }
     }
 
     override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {
@@ -384,5 +422,10 @@ class InputView(
         popup.root.removeAllViews()
         broadcaster.clear()
         super.onDetachedFromWindow()
+    }
+
+    companion object {
+        /** Column the syllable sidebar takes, as a ratio of the screen width. */
+        private const val SYLLABLE_SIDEBAR_WIDTH_RATIO = 0.17f
     }
 }
