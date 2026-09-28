@@ -22,6 +22,7 @@ import com.osfans.trime.data.theme.ThemeScope
 import com.osfans.trime.ime.bar.InputBarDelegate
 import com.osfans.trime.ime.bar.UnrollButtonStateMachine
 import com.osfans.trime.ime.broadcast.InputBroadcastReceiver
+import com.osfans.trime.ime.candidates.syllable.SyllableCandidateRules
 import com.osfans.trime.ime.candidates.unrolled.decoration.FlexboxVerticalDecoration
 import com.osfans.trime.ime.core.InputView
 import kotlinx.coroutines.channels.BufferOverflow
@@ -94,12 +95,13 @@ class CompactCandidateDelegate(override val di: DI) :
     }
 
     val adapter by lazy {
-        CompactCandidateViewAdapter(scope).apply {
-            setOnItemClickListener { _, _, position ->
-                rime.launchOnReady { it.selectCandidate(position, global = true) }
+        CompactCandidateViewAdapter(scope).also { self ->
+            self.setOnItemClickListener { _, _, position ->
+                rime.launchOnReady { it.selectCandidate(self.globalIndexOf(position), global = true) }
             }
-            setOnItemLongClickListener { _, view, position ->
-                inputView.showCandidateActionMenu(position, items[position].text, view, global = true)
+            self.setOnItemLongClickListener { _, view, position ->
+                val index = self.globalIndexOf(position)
+                inputView.showCandidateActionMenu(index, self.items[position].text, view, global = true)
                 true
             }
         }
@@ -174,7 +176,12 @@ class CompactCandidateDelegate(override val di: DI) :
     }
 
     override fun onCandidateListUpdate(data: Candidates.Bulk) {
-        val (total, highlighted, candidates) = data
+        val (total, highlighted, all) = data
+
+        // syllable candidates move to the sidebar; with the sidebar off this is
+        // the identity split, so the bar renders exactly what it always did
+        val split = SyllableCandidateRules.split(all)
+        val candidates = split.displayed
 
         val maxSpanCount = maxSpanCountPref.getValue()
 
@@ -201,7 +208,7 @@ class CompactCandidateDelegate(override val di: DI) :
         }
 
         adapter.updateLayoutParams(layoutMinWidth, layoutFlexGrow)
-        adapter.updateCandidates(candidates, total, highlighted)
+        adapter.updateCandidates(candidates, total, highlighted, split.displayedGlobalIndices)
 
         // not sure why empty candidates won't trigger `FlexboxLayoutManager#onLayoutCompleted()`
         if (candidates.isEmpty()) {

@@ -39,19 +39,30 @@ open class CompactCandidateViewAdapter(
     var layoutFlexGrow: Float = 0f
         private set
 
+    /**
+     * Global index of each displayed candidate. Rows are no longer at the same
+     * position as in the rime list once syllable candidates are filtered out,
+     * so highlight and click both go through this mapping.
+     */
+    private var globalIndices: IntArray = IntArray(0)
+
     fun updateLayoutParams(minWidth: Int, flexGrow: Float) {
         layoutMinWidth = minWidth
         layoutFlexGrow = flexGrow
     }
 
+    fun globalIndexOf(position: Int): Int = globalIndices.getOrElse(position) { position }
+
     fun updateCandidates(
         data: Array<CandidateProto>,
         total: Int,
         highlightedIndex: Int,
+        globalIndices: IntArray,
     ) {
         super.submitList(data.toList(), null)
         this.total = total
         this.highlightedIdx = highlightedIndex
+        this.globalIndices = globalIndices
     }
 
     override fun onCreateViewHolder(
@@ -73,7 +84,7 @@ open class CompactCandidateViewAdapter(
         item: CandidateProto?,
     ) {
         item ?: return
-        val isHighlighted = position == highlightedIdx
+        val isHighlighted = globalIndexOf(position) == highlightedIdx
         holder.ui.update(item, isHighlighted)
         holder.text = item.text
         holder.comment = item.comment
