@@ -106,13 +106,19 @@ comment 同形，靠结构规则（comment 必须等于 text 或以 `text'` 开�
 - **背景不透明**：背景是主题注入的 `candidate_background` + `candidate_border_color`
   （与候选条同一 `decorDrawable`，alpha 默认 255），盖住底下的符号键；行内高亮底色等仍走
   主题色，无硬编码颜色。
-- **滚动**：侧栏是竖直 `LinearLayoutManager` 的 `RecyclerView`，行高取主题的
-  `style.candidateViewHeight`，超出可视范围自然可滚动。
+- **滚动**：侧栏是竖直 `LinearLayoutManager` 的 `RecyclerView`，行高 = `max(主题
+  style.candidateViewHeight, 52dp)`（主题值打底、保证可点），行上下各留 3dp 间距，
+  超出可视范围自然可滚动。行内两行文字作为一个整体垂直居中（packed chain），行距 2dp。
 - **配色**：全部走主题已注入的颜色，无硬编码——背景 `candidate_background` +
   `candidate_border_color`（与候选条同一 `decorDrawable`），大字号 text 用 `candidateTextColor`
   / `fonts.candidate`，comment 用 `commentTextColor` / `fonts.comment`，被高亮项用
   `hilitedCandidateTextColor` / `hilitedCommentTextColor` / `hilitedCandidateBackColor`。
   换配色方案时 `InputView.refreshColors()` 会重建背景并重绑可见行。
+- **字号**：固定 sp 常量——音节 20sp、comment 12sp（`SyllableSidebarItemUi` 伴生对象）。
+  取值依据：主题默认 `candidateTextSize=15sp` / `commentTextSize=10sp`，在 17% 窄列里
+  再经 `AutoScaleTextView` 等比压缩后过小（真机可用性反馈「字太小、点不到」）；
+  颜色与字体仍全部走主题注入的 key，字号不因主题变小而失守。不改主题时
+  行高 52dp + 字号 20/12sp 实测可轻松点按。
 - **字号自适应**：两行文字都用 `AutoScaleTextView`（`Proportional`），音节过长时压缩而不是裁切。
 - **选中**：`rime.selectCandidate(item.globalIndex, global = true)` —— 与候选条点击同一个调用。
   `globalIndex` 是该候选在**完整候选列表**中的全局序号，所以即使它已被候选条过滤掉也正确。

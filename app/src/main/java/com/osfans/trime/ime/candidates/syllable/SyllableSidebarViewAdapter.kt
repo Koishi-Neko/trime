@@ -11,6 +11,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.chad.library.adapter4.BaseQuickAdapter
 import com.osfans.trime.data.theme.ThemeScope
 import splitties.dimensions.dp
+import kotlin.math.max
 
 class SyllableSidebarViewAdapter(
     val scope: ThemeScope,
@@ -40,11 +41,18 @@ class SyllableSidebarViewAdapter(
         viewType: Int,
     ): SyllableSidebarViewHolder {
         val ui = SyllableSidebarItemUi(context, scope)
+        // theme height with a finger-sized floor; the margins leave breathing
+        // room between rows without shrinking the 52dp touch target
+        val rowHeight = max(context.dp(scope.theme.style.candidateViewHeight), context.dp(MIN_ROW_HEIGHT_DP))
+        val margin = context.dp(ROW_MARGIN_DP)
         ui.root.layoutParams =
             RecyclerView.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                context.dp(scope.theme.style.candidateViewHeight),
-            )
+                rowHeight,
+            ).apply {
+                topMargin = margin
+                bottomMargin = margin
+            }
         return SyllableSidebarViewHolder(ui)
     }
 
@@ -55,5 +63,13 @@ class SyllableSidebarViewAdapter(
     ) {
         item ?: return
         holder.ui.update(item, item.globalIndex == highlightedIdx)
+    }
+
+    companion object {
+        /** Every row stays tappable even if the theme shrinks its candidates. */
+        const val MIN_ROW_HEIGHT_DP = 52
+
+        /** Vertical breathing room between two rows. */
+        const val ROW_MARGIN_DP = 3
     }
 }
