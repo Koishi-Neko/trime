@@ -190,9 +190,51 @@ BUILD_ABI=arm64-v8a ./gradlew :app:assembleDebug
 
 - 免编 native：把官方 nightly APK 里的 `lib/arm64-v8a/librime_jni.so` 放到
   `app/prebuilt/arm64-v8a/`，`NativeBaseConventionPlugin` 检测到 `app/prebuilt` 存在就
-  跳过整个 CMake 构建。HEAD 与 nightly 同为 `75844ae`，ABI 一致。
-  `*.so` 被 `.gitignore` 忽略，不入库。
-- `app/build.gradle.kts` 会在配置阶段执行 `git config user.name`，而 `runCmd` 用
-  `providers.exec`（非零退出会直接失败构建），所以 WSL 里必须先设好
-  `git config --global user.name/user.email`，否则 configuration 阶段就挂。
+  跳过整个 CMake 构建。**HEAD 与 nightly 必须同一 commit**（本仓库都是 `75844ae`），
+  否则 JNI ABI 可能对不上。`*.so` 被 `.gitignore` 忽略，不入库。
 - `local.properties` 写 `sdk.dir=...`；`~/.gradle/gradle.properties` 写 HTTP/HTTPS 代理。
+
+---
+
+## 10. 过程中踩到的坑
+
+1. **构建在 configuration 阶段就挂：`Process 'command 'git'' finished with non-zero
+   exit value 1`。**
+   `ProjectExtensions.runCmd()` 用 `providers.exec` 执行 `git config user.name`，
+   而 `providers.exec` 在进程非零退出时直接抛异常，`exitValue == 0` 的判断根本没机会执行。
+   WSL 里没有 git 身份 → `git config user.name` 退出码 1 → 构建失败。
+   **解法**：`git config --global user.name/user.email`（提交本来也需要）。
+   没有改构建脚本，因为这是环境问题而不是代码问题。
+
+2. **没有 root 权限装 JDK/SDK。** `sudo` 需要密码。
+   **解法**：全部装进 `$HOME`——Temurin JDK 21 tarball + Android `cmdline-tools`
+   （用 `python3 -m zipfile` 解压，因为 `unzip` 没装），SDK 包用
+   `sdkmanager --proxy=... --sdk_root=...`。只有 `local.properties` 与
+   `~/.gradle/gradle.properties` 两处配置需要写。
+
+3. **`MatchPattern` 之外的 splitties 常量不是顶层常量。**
+   `splitties.views.dsl.core.matchParent` / `wrapContent` 是 `View` 的扩展属性，
+   只能在有 View 接收者的 builder lambda 里用。在
+   `RecyclerView.LayoutParams(matchParent, …)` 这种没有 View 接收者的位置要用
+   `ViewGroup.LayoutParams.MATCH_PARENT`。
+
+4. **`apply { }` + 嵌套 lambda 里的 `this` 不指向 apply 的接收者**（Kotlin 解析到了内层
+   lambda 的接收者），`this.globalIndexOf(position)` 编译不过。
+   **解法**：改用 `also { self -> … }`，在闭包里显式引用 `self`。
+
+5. **两个消费方必须对同一份候选列表得出相同结论。** 候选条和侧栏都收到同一个
+   `Candidates.Bulk`，如果各自实现一遍识别会漂移。
+   **解法**：识别与切分放在 `SyllableCandidateRules` / `SyllableCandidateSplit` 里，
+   两边都调它；同时把切分逻辑做成纯函数以便单测。
+
+6. **过滤后行号不再等于全局候选号。** 候选条的点击与高亮原本直接用 adapter position
+   当全局索引（`selectCandidate(position, global = true)`）。
+   过滤音节候选后 position 会错位。
+   **解法**：`SyllableCandidateSplit` 额外产出 `displayedGlobalIndices`，
+   adapter 暴露 `globalIndexOf(position)`，点击/长按/高亮三条路径都走它；
+   关闭开关时它是恒等映射，行为与上游一致。
+
+7. **NDK/CMake 下载很慢且会被代理拖住。** 走 prebuilt 路径时其实不需要它们，
+   但 `ndkVersion` 在 convention plugin 里是无条件设置的，所以还是装上更稳
+   （`stripDebugDebugSymbols` 会用 NDK 的 strip）。
+
