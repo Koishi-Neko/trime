@@ -22,7 +22,9 @@ android {
     buildToolsVersion = "36.0.0"
 
     defaultConfig {
-        applicationId = "com.osfans.trime"
+        // the fork installs side by side with upstream Trime, which is signed
+        // with a different key and therefore cannot be upgraded in place
+        applicationId = "com.osfans.trime.shiyin"
         minSdk = 21
         targetSdk = 36
         versionCode = 20261101
@@ -68,8 +70,6 @@ android {
             resValue("string", "trime_app_name", "@string/app_name_release")
         }
         debug {
-            applicationIdSuffix = ".debug"
-
             resValue("string", "trime_app_name", "@string/app_name_debug")
         }
         all {
