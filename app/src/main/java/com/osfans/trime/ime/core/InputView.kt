@@ -30,7 +30,7 @@ import com.osfans.trime.ime.broadcast.InputBroadcastReceiver
 import com.osfans.trime.ime.broadcast.InputBroadcaster
 import com.osfans.trime.ime.candidates.compact.CompactCandidateDelegate
 import com.osfans.trime.ime.candidates.popup.PopupCandidatesMode
-import com.osfans.trime.ime.candidates.syllable.SyllableSidebarDelegate
+import com.osfans.trime.ime.candidates.sidebar.SidebarDelegate
 import com.osfans.trime.ime.composition.PreeditDelegate
 import com.osfans.trime.ime.keyboard.CommonKeyboardActionListener
 import com.osfans.trime.ime.keyboard.KeyboardPrefs.isLandscapeMode
@@ -118,7 +118,7 @@ class InputView(
         bindSingleton { BoardWindowManager(di) }
         bindSingleton { InputBarDelegate(di) }
         bindSingleton { CompactCandidateDelegate(di) }
-        bindSingleton { SyllableSidebarDelegate(di) }
+        bindSingleton { SidebarDelegate(di) }
         bindSingleton { KeyboardWindow(di) }
         bindSingleton { LiquidWindow(di) }
     }
@@ -129,7 +129,7 @@ class InputView(
     private val preedit: PreeditDelegate by instance()
     private val windowManager: BoardWindowManager by instance()
     private val inputBar: InputBarDelegate by instance()
-    private val syllableSidebar: SyllableSidebarDelegate by instance()
+    private val sidebar: SidebarDelegate by instance()
     private val keyboardWindow: KeyboardWindow by instance()
     private val liquidWindow: LiquidWindow by instance()
 
@@ -175,7 +175,7 @@ class InputView(
         popup.refreshColors()
         keyboardWindow.refreshColors()
         inputBar.refreshColors()
-        syllableSidebar.refreshColors()
+        sidebar.refreshColors()
         preedit.refreshColors()
         windowManager.refreshColors()
     }
@@ -237,9 +237,9 @@ class InputView(
                 // bounds, while the keyboard itself keeps exactly the bounds
                 // it has with the sidebar off
                 add(
-                    syllableSidebar.view,
+                    sidebar.view,
                     lParams(matchConstraints, matchConstraints) {
-                        matchConstraintPercentWidth = SYLLABLE_SIDEBAR_WIDTH_RATIO
+                        matchConstraintPercentWidth = SIDEBAR_WIDTH_RATIO
                         below(inputBar.view)
                         above(bottomPaddingSpace)
                         startOfParent()
@@ -400,13 +400,14 @@ class InputView(
         // cancel the notification job and clear all broadcast receivers,
         // implies that InputView should not be attached again after detached.
         updateWindowViewHeightJob.cancel()
+        sidebar.dispose()
         popup.root.removeAllViews()
         broadcaster.clear()
         super.onDetachedFromWindow()
     }
 
     companion object {
-        /** Column the syllable sidebar takes, as a ratio of the screen width. */
-        private const val SYLLABLE_SIDEBAR_WIDTH_RATIO = 0.17f
+        /** Column the sidebar takes, as a ratio of the screen width. */
+        private const val SIDEBAR_WIDTH_RATIO = 0.17f
     }
 }

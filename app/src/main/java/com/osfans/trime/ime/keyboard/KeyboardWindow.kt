@@ -79,13 +79,28 @@ class KeyboardWindow(di: DI) :
         get() = KeyboardWindow
 
     private val presetKeyboardIds = theme.presetKeyboards.keys.toList()
-    private var currentKeyboardId = ""
+
+    private val _currentKeyboardId =
+        MutableSharedFlow<String>(
+            replay = 1,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        )
+
+    /**
+     * Theme id of the keyboard in use, replayed to new subscribers. Neither a
+     * rime message nor a broadcast announces a keyboard switch — a key action
+     * can change the keyboard on its own — so this is what tells an overlay to
+     * re-evaluate what it is covering.
+     */
+    val currentKeyboardId = _currentKeyboardId.asSharedFlow()
+
+    private var keyboardId = ""
     private var lastKeyboardId = ""
     private var lastLockKeyboardId = ""
     private var tempAsciiMode: Boolean? = null
     private val cachedKeyboards = mutableMapOf<String, Pair<Keyboard, KeyboardView>>()
-    private val activeKeyboard: Keyboard? get() = cachedKeyboards[currentKeyboardId]?.first
-    private val currentKeyboardView: KeyboardView? get() = cachedKeyboards[currentKeyboardId]?.second
+    private val activeKeyboard: Keyboard? get() = cachedKeyboards[keyboardId]?.first
+    private val currentKeyboardView: KeyboardView? get() = cachedKeyboards[keyboardId]?.second
 
     private val keyboardActionListener = commonKeyboardActionListener.listener
 
@@ -163,7 +178,8 @@ class KeyboardWindow(di: DI) :
     }
 
     private fun attachKeyboard(target: String) {
-        currentKeyboardId = target
+        keyboardId = target
+        _currentKeyboardId.tryEmit(target)
         lastKeyboardId = target
 
         val config = selectKeyboardConfig(target)
@@ -225,14 +241,14 @@ class KeyboardWindow(di: DI) :
     }
 
     private fun evalKeyboard(id: String): String {
-        val currentIdx = presetKeyboardIds.indexOfFirst { currentKeyboardId == it }
+        val currentIdx = presetKeyboardIds.indexOfFirst { keyboardId == it }
         val dot =
             when (id) {
                 ".default" -> smartMatchKeyboard()
 
-                ".prior" -> presetKeyboardIds.getOrNull(currentIdx - 1) ?: currentKeyboardId
+                ".prior" -> presetKeyboardIds.getOrNull(currentIdx - 1) ?: keyboardId
 
-                ".next" -> presetKeyboardIds.getOrNull(currentIdx + 1) ?: currentKeyboardId
+                ".next" -> presetKeyboardIds.getOrNull(currentIdx + 1) ?: keyboardId
 
                 ".last" -> lastKeyboardId
 
@@ -243,12 +259,12 @@ class KeyboardWindow(di: DI) :
                     if (ascii.isNullOrEmpty()) {
                         ascii = lastLockKeyboardId
                     }
-                    if (presetKeyboardIds.contains(ascii)) ascii else currentKeyboardId
+                    if (presetKeyboardIds.contains(ascii)) ascii else keyboardId
                 }
 
                 else -> {
                     id.ifEmpty {
-                        if (activeKeyboard?.isLock == true) currentKeyboardId else lastLockKeyboardId
+                        if (activeKeyboard?.isLock == true) keyboardId else lastLockKeyboardId
                     }
                 }
             }
@@ -267,7 +283,7 @@ class KeyboardWindow(di: DI) :
         val target = evalKeyboard(to)
         ContextCompat.getMainExecutor(service).execute {
             if (cachedKeyboards.containsKey(target)) {
-                if (target == currentKeyboardId) return@execute
+                if (target == keyboardId) return@execute
             }
             detachCurrentView()
             attachKeyboard(target)
@@ -276,7 +292,7 @@ class KeyboardWindow(di: DI) :
     }
 
     fun refreshKeyboards(isAll: Boolean = false) {
-        val id = currentKeyboardId.ifEmpty { return }
+        val id = keyboardId.ifEmpty { return }
         detachCurrentView()
         if (isAll) {
             cachedKeyboards.clear()

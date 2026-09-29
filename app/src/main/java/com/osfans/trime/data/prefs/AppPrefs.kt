@@ -349,6 +349,7 @@ class AppPrefs(
             const val LAYOUT = "candidates_layout"
             const val POSITION = "candidates_window_position"
             const val SYLLABLE_SIDEBAR = "syllable_sidebar"
+            const val SYMBOL_SIDEBAR = "symbol_sidebar"
             const val SYLLABLE_TEXT_PATTERN = "syllable_text_pattern"
             const val SYLLABLE_COMMENT_PATTERN = "syllable_comment_pattern"
         }
@@ -362,6 +363,13 @@ class AppPrefs(
          * out of the candidate bar and into a vertical sidebar.
          */
         val syllableSidebar = switch(R.string.syllable_sidebar, SYLLABLE_SIDEBAR, true)
+
+        /**
+         * Replaces the leftmost column of the nine-key keyboards with a
+         * scrollable set of the symbols that column holds anyway: punctuation
+         * on the main keyboard, calculator symbols on the number one.
+         */
+        val symbolSidebar = switch(R.string.symbol_sidebar, SYMBOL_SIDEBAR, true)
 
         val syllableTextPattern = editText(
             R.string.syllable_text_pattern,

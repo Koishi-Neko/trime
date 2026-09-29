@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-package com.osfans.trime.ime.candidates.syllable
+package com.osfans.trime.ime.candidates.sidebar
 
 import android.content.Context
 import android.graphics.Color
@@ -30,7 +30,7 @@ import splitties.views.gravityCenter
 import splitties.views.horizontalPadding
 
 /**
- * One row of the syllable sidebar: the syllable in the candidate text style,
+ * One syllable row of the sidebar: the syllable in the candidate text style,
  * its key sequence underneath in the comment style.
  *
  * The labels are sized for a sidebar, not for the candidate bar: the theme
@@ -42,7 +42,7 @@ import splitties.views.horizontalPadding
  * Both labels use [AutoScaleTextView] so a long syllable is squeezed into the
  * narrow column instead of being clipped.
  */
-class SyllableSidebarItemUi(
+class SyllableItemUi(
     override val ctx: Context,
     private val scope: ThemeScope,
 ) : Ui {
@@ -101,7 +101,7 @@ class SyllableSidebarItemUi(
         }
 
     fun update(
-        item: SyllableCandidate,
+        item: SidebarEntry.Syllable,
         highlighted: Boolean,
     ) {
         val cornerRadius = ctx.dp(theme.style.candidateCornerRadius)

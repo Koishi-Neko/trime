@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-package com.osfans.trime.ime.candidates.syllable
+package com.osfans.trime.ime.candidates.sidebar
 
 import android.content.Context
 import android.view.ViewGroup
@@ -13,9 +13,9 @@ import com.osfans.trime.data.theme.ThemeScope
 import splitties.dimensions.dp
 import kotlin.math.max
 
-class SyllableSidebarViewAdapter(
+class SidebarViewAdapter(
     val scope: ThemeScope,
-) : BaseQuickAdapter<SyllableCandidate, SyllableSidebarViewHolder>() {
+) : BaseQuickAdapter<SidebarEntry, SidebarViewHolder>() {
     init {
         setHasStableIds(true)
     }
@@ -27,25 +27,35 @@ class SyllableSidebarViewAdapter(
     var highlightedIdx: Int = -1
         private set
 
-    fun updateCandidates(
-        syllables: List<SyllableCandidate>,
+    fun updateEntries(
+        entries: List<SidebarEntry>,
         highlightedIndex: Int,
     ) {
         highlightedIdx = highlightedIndex
-        super.submitList(syllables, null)
+        super.submitList(entries, null)
     }
+
+    override fun getItemViewType(
+        position: Int,
+        list: List<SidebarEntry>,
+    ): Int = if (list.getOrNull(position) is SidebarEntry.Symbol) VIEW_TYPE_SYMBOL else VIEW_TYPE_SYLLABLE
 
     override fun onCreateViewHolder(
         context: Context,
         parent: ViewGroup,
         viewType: Int,
-    ): SyllableSidebarViewHolder {
-        val ui = SyllableSidebarItemUi(context, scope)
+    ): SidebarViewHolder {
+        val holder =
+            if (viewType == VIEW_TYPE_SYMBOL) {
+                SidebarViewHolder.Symbol(SymbolItemUi(context, scope))
+            } else {
+                SidebarViewHolder.Syllable(SyllableItemUi(context, scope))
+            }
         // theme height with a finger-sized floor; the margins leave breathing
         // room between rows without shrinking the 52dp touch target
         val rowHeight = max(context.dp(scope.theme.style.candidateViewHeight), context.dp(MIN_ROW_HEIGHT_DP))
         val margin = context.dp(ROW_MARGIN_DP)
-        ui.root.layoutParams =
+        holder.ui.root.layoutParams =
             RecyclerView.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 rowHeight,
@@ -53,19 +63,31 @@ class SyllableSidebarViewAdapter(
                 topMargin = margin
                 bottomMargin = margin
             }
-        return SyllableSidebarViewHolder(ui)
+        return holder
     }
 
     override fun onBindViewHolder(
-        holder: SyllableSidebarViewHolder,
+        holder: SidebarViewHolder,
         position: Int,
-        item: SyllableCandidate?,
+        item: SidebarEntry?,
     ) {
-        item ?: return
-        holder.ui.update(item, item.globalIndex == highlightedIdx)
+        when (holder) {
+            is SidebarViewHolder.Syllable -> {
+                val syllable = item as? SidebarEntry.Syllable ?: return
+                holder.ui.update(syllable, syllable.globalIndex == highlightedIdx)
+            }
+
+            is SidebarViewHolder.Symbol -> {
+                val symbol = item as? SidebarEntry.Symbol ?: return
+                holder.ui.update(symbol)
+            }
+        }
     }
 
     companion object {
+        private const val VIEW_TYPE_SYLLABLE = 0
+        private const val VIEW_TYPE_SYMBOL = 1
+
         /** Every row stays tappable even if the theme shrinks its candidates. */
         const val MIN_ROW_HEIGHT_DP = 52
 

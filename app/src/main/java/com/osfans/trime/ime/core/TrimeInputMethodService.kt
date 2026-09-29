@@ -106,6 +106,9 @@ open class TrimeInputMethodService : LifecycleInputMethodService() {
         // the sidebar takes a column out of the keyboard, so it is part of the
         // input view's layout rather than something it can be told at runtime
         prefs.candidates.syllableSidebar,
+        // the symbol sets only change what the sidebar shows, but rebuilding
+        // the input view is what makes the switch take effect right away
+        prefs.candidates.symbolSidebar,
     )
 
     private val themeScope: ThemeScope?
