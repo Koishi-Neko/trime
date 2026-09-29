@@ -28,15 +28,21 @@ import splitties.views.gravityCenter
 import splitties.views.horizontalPadding
 
 /**
- * One symbol row of the sidebar: a single large glyph (or a bracket pair),
- * centred in the row.
+ * One symbol row of the sidebar: a single glyph, or a bracket pair, centred in
+ * a key-sized row.
  *
- * Symbols never get a second line and never highlight, so they are their own
- * view type — the label is one [AutoScaleTextView] spanning the row and the
- * font size is set once, when the holder is created. That matters because
- * [AutoScaleTextView] caches its measured glyph bounds and only re-measures
- * when its text is replaced, not when the size changes; a size that varied
- * per bind would be drawn with stale metrics.
+ * The row is styled as a keyboard key rather than as a candidate: the label
+ * takes the theme key text color and key font, the press highlight is the
+ * theme key highlight, and the corner radius is the theme key round corner.
+ * Nothing is hard-coded, so a dark or light scheme restyles the column the way
+ * it restyles the keys.
+ *
+ * Symbols never get a second line and never highlight as candidates, so they
+ * are their own view type: the label is one [AutoScaleTextView] spanning the
+ * row, and its size is set once, when the holder is created. That matters
+ * because [AutoScaleTextView] caches its measured glyph bounds and only
+ * re-measures when its text is replaced, not when the size changes; a size
+ * that varied per bind would be drawn with stale metrics.
  *
  * The label is constrained to the row width, so a two-character pair that is
  * wider than the narrow column is squeezed instead of clipped.
@@ -47,14 +53,14 @@ class SymbolItemUi(
 ) : Ui {
     private val theme: Theme get() = scope.theme
 
-    private val textColor: Int get() = scope.colors.candidateTextColor
-    private val hlBackColor: Int get() = scope.colors.hilitedCandidateBackColor
+    private val textColor: Int get() = scope.colors.keyTextColor
+    private val hlBackColor: Int get() = scope.colors.hilitedKeyBackColor
 
     private val symbol =
         view(::AutoScaleTextView) {
             id = View.generateViewId()
-            textSize = SYMBOL_SIZE_SP
-            typeface = theme.fonts.candidate
+            textSize = theme.style.keyTextSize.takeIf { it > 0f } ?: SYMBOL_SIZE_SP
+            typeface = theme.fonts.key
             isSingleLine = true
             gravity = gravityCenter
             scaleMode = AutoScaleTextView.Mode.Proportional
@@ -74,14 +80,14 @@ class SymbolItemUi(
         }
 
     fun update(item: SidebarEntry.Symbol) {
-        val cornerRadius = ctx.dp(theme.style.candidateCornerRadius)
+        val cornerRadius = ctx.dp(theme.style.roundCorner).toFloat()
         root.background = roundedRippleDrawable(hlBackColor, cornerRadius, Color.TRANSPARENT)
         symbol.text = item.text
         symbol.setTextColor(textColor)
     }
 
     companion object {
-        /** Size of the glyph; the row is single-line, so it can be large. */
+        /** Glyph size when the theme carries no key text size. */
         const val SYMBOL_SIZE_SP = 24f
     }
 }

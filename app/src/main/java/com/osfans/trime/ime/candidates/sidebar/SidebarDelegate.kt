@@ -9,6 +9,8 @@ import android.os.Build
 import android.view.ContextThemeWrapper
 import android.view.KeyEvent
 import android.view.View
+import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -53,6 +55,12 @@ import timber.log.Timber
  * (its background is opaque, hiding the punctuation keys underneath). The view
  * is `GONE` whenever there is nothing to show, which lets the touches reach
  * the punctuation keys again.
+ *
+ * Its geometry is the leftmost key column of the keyboard made taller — see
+ * [SidebarGeometry] — and it wears the key material: the column starts on the
+ * keyboard's own left edge, takes the key back color with the theme key border
+ * and round corner, and stops on the bottom row, so the 「符」 key the theme
+ * keeps there stays reachable.
  */
 class SidebarDelegate(override val di: DI) :
     DIAware,
@@ -124,6 +132,7 @@ class SidebarDelegate(override val di: DI) :
         service.lifecycleScope.launch {
             keyboardWindow.currentKeyboardId.collect {
                 keyboardId = it
+                applyGeometry()
                 reevaluate()
             }
         }
@@ -142,13 +151,19 @@ class SidebarDelegate(override val di: DI) :
         adapter.notifyDataSetChanged()
     }
 
+    /**
+     * Paints the column with the keyboard key material — key back color, key
+     * border, theme key round corner — instead of the candidate bar's, so it
+     * reads as one tall key of the column it replaces. Rebuilt on a scheme
+     * switch, when [refreshColors] runs.
+     */
     private fun applyBackground(target: RecyclerView) {
         target.background =
             scope.decorDrawable(
-                "candidate_background",
-                "candidate_border_color",
-                context.dp(theme.style.candidateBorder),
-                context.dp(theme.style.candidateBorderRound),
+                "key_back_color",
+                "key_border_color",
+                context.dp(theme.style.keyBorder),
+                context.dp(theme.style.roundCorner).toFloat(),
             )
     }
 
@@ -174,6 +189,35 @@ class SidebarDelegate(override val di: DI) :
         val ic = service.currentInputConnection ?: return
         ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_LEFT))
         ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_LEFT))
+    }
+
+    /**
+     * Takes the bounds of the column the sidebar covers from the keyboard in
+     * use: the drawn bounds of the leftmost key of every row but the bottom
+     * one. Tiling the rows inside it also gives the list its key row height,
+     * so three symbols fill the visible column and the rest scrolls.
+     *
+     * Without a keyboard — before the first attach — nothing is applied and
+     * the view keeps the percentage fallback of its layout params.
+     */
+    private fun applyGeometry() {
+        val keyboard = keyboardWindow.attachedKeyboard ?: return
+        val bounds =
+            SidebarGeometry.column(
+                keys = keyboard.keys.map { SidebarKeyBounds(it.x, it.y, it.width, it.height, it.row) },
+                horizontalGap = keyboard.horizontalGap,
+                verticalGap = keyboard.verticalGap,
+            ) ?: return
+        view.updateLayoutParams<ConstraintLayout.LayoutParams> {
+            width = bounds.width
+            height = bounds.height
+            // the view is anchored below the bar and above the bottom padding:
+            // a top bias pins it to the first key row instead of centring it
+            verticalBias = 0f
+            topMargin = bounds.top
+            marginStart = bounds.left
+        }
+        adapter.rowHeight = bounds.rowHeight
     }
 
     private fun reevaluate() {

@@ -239,7 +239,13 @@ class InputView(
                 add(
                     sidebar.view,
                     lParams(matchConstraints, matchConstraints) {
+                        // the delegate replaces these percentages with the
+                        // bounds of the key column it covers as soon as a
+                        // keyboard is attached; until then, cover every row
+                        // but the bottom one
+                        verticalBias = 0f
                         matchConstraintPercentWidth = SIDEBAR_WIDTH_RATIO
+                        matchConstraintPercentHeight = SIDEBAR_HEIGHT_RATIO
                         below(inputBar.view)
                         above(bottomPaddingSpace)
                         startOfParent()
@@ -306,6 +312,10 @@ class InputView(
                 startOfParent()
                 endOfParent()
             }
+            sidebar.view.updateLayoutParams<LayoutParams> {
+                startToEnd = unset
+                startOfParent()
+            }
         } else {
             leftPaddingSpace.visibility = View.VISIBLE
             rightPaddingSpace.visibility = View.VISIBLE
@@ -320,6 +330,12 @@ class InputView(
                 endToEnd = unset
                 startToEndOf(leftPaddingSpace)
                 endToStartOf(rightPaddingSpace)
+            }
+            // the sidebar covers the keyboard's own left column, so it starts
+            // where the keyboard starts and needs no side padding of its own
+            sidebar.view.updateLayoutParams<LayoutParams> {
+                startToStart = unset
+                startToEndOf(leftPaddingSpace)
             }
         }
         preedit.ui.root.setPadding(sidePadding, 0, sidePadding, 0)
@@ -407,7 +423,18 @@ class InputView(
     }
 
     companion object {
-        /** Column the sidebar takes, as a ratio of the screen width. */
-        private const val SIDEBAR_WIDTH_RATIO = 0.17f
+        /**
+         * Fallback column width, as a ratio of the input view width. The
+         * sidebar normally takes its width from the key column it covers; this
+         * is what is left when no keyboard has been measured yet.
+         */
+        private const val SIDEBAR_WIDTH_RATIO = 0.155f
+
+        /**
+         * Fallback share of the keyboard the sidebar covers before the key
+         * geometry is known: every row but the bottom one, which holds the
+         * theme's own 「符」 key.
+         */
+        private const val SIDEBAR_HEIGHT_RATIO = 0.75f
     }
 }

@@ -7,6 +7,7 @@ package com.osfans.trime.ime.candidates.sidebar
 
 import android.content.Context
 import android.view.ViewGroup
+import androidx.core.view.updateLayoutParams
 import androidx.recyclerview.widget.RecyclerView
 import com.chad.library.adapter4.BaseQuickAdapter
 import com.osfans.trime.data.theme.ThemeScope
@@ -26,6 +27,19 @@ class SidebarViewAdapter(
     /** Global index of the candidate rime currently highlights, or -1. */
     var highlightedIdx: Int = -1
         private set
+
+    /**
+     * Height of one row in px, as the delegate reads it from the keyboard key
+     * rows. Rows tile the covered column with no margins, so the eight symbols
+     * show three at a time and the rest scrolls. Zero keeps the theme fallback,
+     * for a list that is shown before the first keyboard is measured.
+     */
+    var rowHeight: Int = 0
+        set(value) {
+            if (field == value) return
+            field = value
+            notifyDataSetChanged()
+        }
 
     fun updateEntries(
         entries: List<SidebarEntry>,
@@ -51,18 +65,11 @@ class SidebarViewAdapter(
             } else {
                 SidebarViewHolder.Syllable(SyllableItemUi(context, scope))
             }
-        // theme height with a finger-sized floor; the margins leave breathing
-        // room between rows without shrinking the 52dp touch target
-        val rowHeight = max(context.dp(scope.theme.style.candidateViewHeight), context.dp(MIN_ROW_HEIGHT_DP))
-        val margin = context.dp(ROW_MARGIN_DP)
         holder.ui.root.layoutParams =
             RecyclerView.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                rowHeight,
-            ).apply {
-                topMargin = margin
-                bottomMargin = margin
-            }
+                resolvedRowHeight(context),
+            )
         return holder
     }
 
@@ -71,6 +78,11 @@ class SidebarViewAdapter(
         position: Int,
         item: SidebarEntry?,
     ) {
+        // the geometry can change under a bound holder (another keyboard, a
+        // scheme rebuild), so the row height follows the keyboard on every bind
+        holder.ui.root.updateLayoutParams<RecyclerView.LayoutParams> {
+            height = resolvedRowHeight(holder.ui.ctx)
+        }
         when (holder) {
             is SidebarViewHolder.Syllable -> {
                 val syllable = item as? SidebarEntry.Syllable ?: return
@@ -84,14 +96,16 @@ class SidebarViewAdapter(
         }
     }
 
+    /** Key row height once the keyboard is measured, the theme height before that. */
+    private fun resolvedRowHeight(context: Context): Int =
+        rowHeight.takeIf { it > 0 }
+            ?: max(context.dp(scope.theme.style.candidateViewHeight), context.dp(MIN_ROW_HEIGHT_DP))
+
     companion object {
         private const val VIEW_TYPE_SYLLABLE = 0
         private const val VIEW_TYPE_SYMBOL = 1
 
-        /** Every row stays tappable even if the theme shrinks its candidates. */
+        /** Fallback row height floor, used until the keyboard key rows are known. */
         const val MIN_ROW_HEIGHT_DP = 52
-
-        /** Vertical breathing room between two rows. */
-        const val ROW_MARGIN_DP = 3
     }
 }

@@ -27,6 +27,10 @@
 没有组字时侧栏把这 8 个符号直接铺开（可滚动，一屏约 4 行），点一下即上屏；九宫数字
 键盘上换成 8 个计算符号。两种内容不会同时出现：有音节候选时音节优先。
 
+侧栏的观感照手机自带输入法（百度输入法九宫格）的做法：与按键**同材质**的一条通高圆角
+单列，符号大字号纵向均布、可滚动，没有候选条式的行分割；这条列只覆盖**上面 3 行键**，
+底行左角留给主题自己的「符」键。
+
 ---
 
 ## 2. 识别规则
@@ -179,38 +183,45 @@ InputView 生效。
 
 ## 5. 行为细节
 
-- **位置**：`InputView.keyboardView` 内，约束为 `below(inputBar.view)` + `above(bottomPaddingSpace)`
-  + `startOfParent()`，宽度 `matchConstraintPercentWidth = 0.17`（屏宽的 17%，落在要求的 15–18% 区间）。
-- **叠加而非占列**：侧栏在 `keyboardView` 里**加在 `windowManager.view`（键盘按键区）之后**，
-  因此浮于按键区之上、拦截其 bounds 内的触摸；键盘区的左右边界约束与侧栏关闭时**逐字段一致**
-  （`startToEndOf(leftPaddingSpace)`/`endToStartOf(rightPaddingSpace)` 或贴父级两端），
-  布局、宽度完全不变。侧栏隐藏（`GONE`）后符号列自然露出、恢复可点。
-- **背景不透明**：背景是主题注入的 `candidate_background` + `candidate_border_color`
-  （与候选条同一 `decorDrawable`，alpha 默认 255），盖住底下的符号键；行内高亮底色等仍走
-  主题色，无硬编码颜色。
-- **滚动**：侧栏是竖直 `LinearLayoutManager` 的 `RecyclerView`，行高 = `max(主题
-  style.candidateViewHeight, 52dp)`（主题值打底、保证可点），行上下各留 3dp 间距，
-  超出可视范围自然可滚动。行内两行文字作为一个整体垂直居中（packed chain），行距 2dp。
-- **配色**：全部走主题已注入的颜色，无硬编码——背景 `candidate_background` +
-  `candidate_border_color`（与候选条同一 `decorDrawable`），大字号 text 用 `candidateTextColor`
-  / `fonts.candidate`，comment 用 `commentTextColor` / `fonts.comment`，被高亮项用
-  `hilitedCandidateTextColor` / `hilitedCommentTextColor` / `hilitedCandidateBackColor`。
-  换配色方案时 `InputView.refreshColors()` 会重建背景并重绑可见行。
-- **字号**：固定 sp 常量——音节 20sp、comment 12sp（`SyllableItemUi` 伴生对象）。
-  取值依据：主题默认 `candidateTextSize=15sp` / `commentTextSize=10sp`，在 17% 窄列里
-  再经 `AutoScaleTextView` 等比压缩后过小（真机可用性反馈「字太小、点不到」）；
-  颜色与字体仍全部走主题注入的 key，字号不因主题变小而失守。不改主题时
-  行高 52dp + 字号 20/12sp 实测可轻松点按。
-- **字号自适应**：两行文字都用 `AutoScaleTextView`（`Proportional`），音节过长时压缩而不是裁切。
-- **符号行**：单行、字号 24sp（`SymbolItemUi.SYMBOL_SIZE_SP`）、垂直居中，两字符的
-  `（）`/`【】` 被约束在行宽内等比压缩，不会裁切。符号行没有 comment、也不参与高亮。
-  它独占一个 RecyclerView view type（`SidebarEntry.Symbol`），不与音节行共用 ViewHolder：
-  `AutoScaleTextView` 只在 `setText` 时重算字形度量，字号必须在这一行创建时就定死
-  （见第 11 节）。
-- **选中**：`rime.selectCandidate(item.globalIndex, global = true)` —— 与候选条点击同一个调用。
-  `globalIndex` 是该候选在**完整候选列表**中的全局序号，所以即使它已被候选条过滤掉也正确。
-- **高亮**：`Candidates.Bulk.highlighted` 是全局索引，侧栏逐项比较决定是否高亮；候选条的
-  高亮/点击也改为通过同一张全局索引表映射。
+### 5.1 几何：直接量取键盘左列键位
+
+侧栏不是一条按比例摆上去的浮层，而是**键盘最左列键的实框**：
+
+- **来源**：键盘 attach 之后，`SidebarGeometry.column()`（纯函数，单测 `SidebarGeometryTest`）
+  从 `KeyboardWindow.attachedKeyboard.keys` 读每行的键框（`x`/`y`/`width`/`height`/`row`），
+  选出**除最后一行外**所有行里 `x` 最小的那一列键；
+- **只覆盖上面 3 行**：`top = 首行键 y + gap/2`，`bottom = 第 3 行键 y + height - gap/2`，
+  高度即 3 行键 + 2 个行距。底行不在覆盖范围内，所以主题底行左角的「符」键始终可点；
+  规则是「除最后一行外」，主题若是 5 行键盘就覆盖上面 4 行，不是写死 3 行；
+- **宽度 = 该列键的实宽**：左边界取该列最左、右边界取该列最宽的一个键，再按 `KeyView` 的
+  padding 规则各内缩半个横向 gap，于是与旁边的键严丝合缝（主题里侧栏键 15.5%，落地就是
+  15.5% 减去一个 gap）。不再有「17% 屏宽」这个常量；
+- **行高 = 列高 / 行数**（即键盘键高），行与行之间**零间距**，所以列表一屏正好 3 行、
+  其余滚动（8 个符号约 3 屏）；
+- **落位**：`view.updateLayoutParams` 设成固定像素宽高 + `topMargin`/`marginStart`，并用
+  `verticalBias = 0` 顶对齐。侧栏的水平锚点与键盘区**同一锚点**（`keyboardPadding = 0` 时
+  贴父级 start，否则 `startToEndOf(leftPaddingSpace)`，由 `InputView.updateKeyboardSize()`
+  统一切换），因此 `keyboardPadding ≠ 0` 时侧栏也跟着键盘左缘，不再有偏移；
+- **回退**：键盘还没 attach（或取不到键位）时用布局里的百分比兜底 —— 宽 `0.155 × 输入视图宽`、
+  高 `0.75 × 键盘区高`、顶对齐。这是唯一的近似路径，正常路径是精确值。
+
+### 5.2 样式：与键盘按键同材质
+
+- **列背景**：`scope.decorDrawable("key_back_color", "key_border_color", dp(主题 key_border),
+  主题 round_corner)` —— 与按键同一条取色链路（`ColorManager.resolveDrawable`：颜色值 →
+  新建 `GradientDrawable`，图片值 → 图片 drawable），所以底色、描边、圆角全部跟随配色方案，
+  无硬编码颜色；换方案时 `InputView.refreshColors()` → `SidebarDelegate.refreshColors()`
+  重建背景并重绑可见行。
+- **符号行**：单行大字号，文字 `key_text_color` + `fonts.key` + 主题 `key_text_size`
+  （主题没配时回落 24sp），按下高亮 = `hilited_key_back_color` 的圆角 ripple，圆角 = 主题
+  `round_corner`；没有行分割线、没有候选条背景、没有行距。
+- **音节行**：UI 不动（两行 text + comment，字号 20sp/12sp，颜色仍是候选色系），只是容器
+  换成键材质、行高变成键高（配色反差见第 9 节第 12 条）。
+- **叠加而非占列**（不变）：侧栏加在 `windowManager.view`（按键区）之后，浮于其上、拦截
+  其 bounds 内的触摸；`GONE` 时符号列自然露出。键盘区自身的 bounds 与侧栏关闭时逐字段一致。
+- **选中 / 高亮**（不变）：音节行走 `rime.selectCandidate(globalIndex, global = true)`，
+  `Candidates.Bulk.highlighted` 逐项比较；符号行不参与高亮。
+- 横竖屏、分屏键盘的几何未在真机验证（见第 9 节）。
 
 ---
 
@@ -260,6 +271,7 @@ native 层**一个文件都没改**，`app/src/main/jni/**` 干净；构建走 p
 | --- | --- |
 | `SidebarEntry.kt` | 行模型：`Syllable(text, comment, globalIndex)` / `Symbol(text, cursorBack)` |
 | `SidebarContentResolver.kt` | 显隐与内容的纯函数判定（第 3.1 节的优先级表） |
+| `SidebarGeometry.kt` | 覆盖列几何的纯函数（键框 → 列 bounds + 行高，第 5.1 节） |
 | `SidebarDelegate.kt` | 侧栏 `RecyclerView`、接收候选/组字/键盘广播、显隐与点击（音节→选候选，符号→上屏） |
 | `SidebarViewAdapter.kt` | 侧栏 adapter（两种 view type） |
 | `SidebarViewHolder.kt` | 侧栏 ViewHolder（`Syllable` / `Symbol`） |
@@ -274,7 +286,7 @@ native 层**一个文件都没改**，`app/src/main/jni/**` 干净；构建走 p
 | `ime/candidates/compact/CompactCandidateViewAdapter.kt` | 新增 `globalIndices` 与 `globalIndexOf()`；高亮按全局索引判定 |
 | `ime/candidates/syllable/` 下的 4 个 UI 文件 | 移到 `ime/candidates/sidebar/` 并改名（`SidebarDelegate` / `SidebarViewAdapter` / `SidebarViewHolder` / `SyllableItemUi`） |
 | `ime/core/InputView.kt` | 注册 `SidebarDelegate`；侧栏以叠加方式加在 `windowManager.view` 之后；键盘左右边界保持上游逻辑；`onDetachedFromWindow()` 里 `sidebar.dispose()` 取消键盘订阅 |
-| `ime/keyboard/KeyboardWindow.kt` | 新增 `currentKeyboardId` flow（`attachKeyboard()` 里 emit）、私有字段 `currentKeyboardId` 改名 `keyboardId` |
+| `ime/keyboard/KeyboardWindow.kt` | 新增 `currentKeyboardId` flow 与 `attachedKeyboard`（`attachKeyboard()` 末尾 emit，订阅者随手可读键盘键位）、私有字段 `currentKeyboardId` 改名 `keyboardId` |
 | `ime/core/TrimeInputMethodService.kt` | 开关变化时重建 InputView（音节开关会改变布局；符号开关也走同一条路径以立即生效） |
 | `data/prefs/AppPrefs.kt` | 新增 4 个候选窗口偏好 |
 | `res/values/input_view_ids.xml` | `syllable_sidebar_view` → `sidebar_view` |
@@ -307,9 +319,9 @@ BUILD_ABI=arm64-v8a ./gradlew :app:assembleDebug
 ```
 
 - 构建日志中不出现 `configureCMake` / `buildCMake`（prebuilt native 路径生效）。
-- 单测（本次新增 15 例）：`SyllableCandidateDetectorTest`（7 例）、`SyllableCandidateSplitTest`
-  （4 例）、`SymbolSetsTest`（4 例）、`SymbolKeyboardKindTest`（4 例）、
-  `SidebarContentResolverTest`（7 例）；全部 **366** 个用例通过，0 失败。
+- 单测：`SyllableCandidateDetectorTest`（7 例）、`SyllableCandidateSplitTest`（4 例）、
+  `SymbolSetsTest`（4 例）、`SymbolKeyboardKindTest`（6 例）、`SidebarContentResolverTest`
+  （7 例）、`SidebarGeometryTest`（10 例）；全部 **378** 个用例通过，0 失败。
 - 产物里只有 `lib/arm64-v8a/librime_jni.so` 一个 native 库。
 
 单测覆盖：
@@ -326,7 +338,10 @@ BUILD_ABI=arm64-v8a ./gradlew :app:assembleDebug
   `symbols` / 空串 → 不显示，大小写无关；
 - 符号集内容与顺序：各 8 项、`（）` 与 `【】` 的 `cursorBack = 1`、其余为 0；
 - 显隐优先级：音节候选优先、九宫主键盘未组字→标点、组字中→空、九宫数字键盘→运算符
-  （组字中也显示）、其它键盘→空、开关关掉→空（音节行不受影响）。
+  （组字中也显示）、其它键盘→空、开关关掉→空（音节行不受影响）；
+- 几何：4 行键盘覆盖上面 3 行、底行剩余高度不计入、宽度取左列最宽的键、左右上下各内缩
+  半个 gap、左列不从 0 开始时跟着平移、行高 = 列高/行数、空键盘 / 只有一行 /
+  间距大于键尺寸时返回 null（回退到百分比）。
 
 ---
 
@@ -338,9 +353,10 @@ BUILD_ABI=arm64-v8a ./gradlew :app:assembleDebug
 2. **候选列表上限 16**。JNI 的 `getBulkCandidates()` 只取前 16 项（`limit = 16`）。音节候选
    被排在列表最前面，够用；若某方案把音节放到 16 名之后就看不到。
 3. **「展开全部候选」面板不参与过滤**（`FlexboxUnrolledCandidateWindow` 仍会显示音节候选）。
-4. **宽度固定 17% 屏宽**，不随主题、横竖屏或候选数量调整；叠加位置固定在键盘最左缘
-   （`startOfParent`）。若主题的 `keyboardPadding ≠ 0`，或最左一列不是符号列，叠加处与
-   实际符号列会有偏移。
+4. **几何取自键盘键位**（第 5.1 节），因此随主题、布局与横竖屏自动变化；若主题的最左一列
+   不是符号列（或该列缺少某个键），侧栏会照着它的键框覆盖过去，需要换主题或改
+   `SidebarGeometry` 的取列规则。键盘还没 attach 时用百分比兜底（宽 15.5%、高 75%），
+   这一路径不保证与键位对齐。
 5. **识别是启发式的**。comment 与 text 同形的英文补全（`you`/`you`）会按音节接受；
    方案若用别的格式，需要在设置里改两个正则（字符类层面），或改
    `SyllableCandidateDetector` 的默认值。
@@ -365,6 +381,18 @@ BUILD_ABI=arm64-v8a ./gradlew :app:assembleDebug
    键盘出现运算符集，`（）`/`【】` 光标落在括号中间；④ 26 键键盘上侧栏从不出现；
    ⑤ 关掉「符号侧栏」后符号集消失、音节侧栏不受影响；⑥ 符号行的垂直居中（符号行没有
    comment，靠约束居中，未在真机上量过）。
+12. **音节行的配色仍是候选色系**（本次只换容器材质）。若主题的 `candidate_background` 与
+   `key_back_color` 明暗相差很大，音节行的文字（`candidateTextColor`）在键材质上可能反差
+   不足；真机上觉得糊就把 `SyllableItemUi` 的取色换成同一套键色（`key_text_color` /
+   `fonts.key`）。
+13. **列材质走颜色链路**：`key_back_color` 解析成颜色时得到纯色圆角矩形。主题若用**图片**
+   作按键背景（`key_back_color` 指向图片），`decorDrawable` 会返回该图片，但列的圆角、圆角
+   半径仍按渐变绘制的那一套处理；按键自己的 per-key 覆盖（例如左列键写
+   `key_back_color: szbdb`）不会作用到侧栏 —— 侧栏取的是配色方案里的键色，不是被覆盖键的
+   样式。要让侧栏跟随某个键样式，需要把 `key_back_color` 换成那套颜色，或在
+   `SidebarDelegate.applyBackground()` 里直接取该键的 `getBackgroundDrawable()`。
+14. **横屏 / 分屏键盘未验证**：几何是按 `row` 与键框算的，理论上前者不需要改；但横屏主题常
+   用 `landscape_keyboard`/`split_space_percent`，侧栏是否落在正确的一列没有实测。
 
 ---
 

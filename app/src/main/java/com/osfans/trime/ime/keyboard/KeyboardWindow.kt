@@ -90,11 +90,22 @@ class KeyboardWindow(di: DI) :
      * Theme id of the keyboard in use, replayed to new subscribers. Neither a
      * rime message nor a broadcast announces a keyboard switch — a key action
      * can change the keyboard on its own — so this is what tells an overlay to
-     * re-evaluate what it is covering.
+     * re-evaluate what it is covering. It is announced once the new keyboard
+     * and its view are in place, so a subscriber may read [attachedKeyboard]
+     * right away.
      */
     val currentKeyboardId = _currentKeyboardId.asSharedFlow()
 
     private var keyboardId = ""
+
+    /**
+     * The keyboard in use, or null before the first one is attached. Mirrors
+     * [currentKeyboard] without the lateinit, so an overlay can read the
+     * geometry of the keys it is covering.
+     */
+    var attachedKeyboard: Keyboard? = null
+        private set
+
     private var lastKeyboardId = ""
     private var lastLockKeyboardId = ""
     private var tempAsciiMode: Boolean? = null
@@ -179,7 +190,6 @@ class KeyboardWindow(di: DI) :
 
     private fun attachKeyboard(target: String) {
         keyboardId = target
-        _currentKeyboardId.tryEmit(target)
         lastKeyboardId = target
 
         val config = selectKeyboardConfig(target)
@@ -207,6 +217,7 @@ class KeyboardWindow(di: DI) :
             }
 
             currentKeyboard = it
+            attachedKeyboard = it
         }
 
         view.let {
@@ -215,6 +226,9 @@ class KeyboardWindow(di: DI) :
                 add(it, lParams(matchParent, matchParent))
             }
         }
+
+        // announced last: a subscriber reads the new keyboard's geometry
+        _currentKeyboardId.tryEmit(target)
     }
 
     private fun smartMatchKeyboard(): String {
