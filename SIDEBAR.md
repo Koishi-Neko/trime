@@ -116,17 +116,24 @@ comment 同形，靠结构规则（comment 必须等于 text 或以 `text'` 开�
 ### 3.2 键盘 id 的判定方式（重要限制）
 
 键盘 id 是**主题数据**，不是固定枚举：仓库里没有任何 `jiugong` 字样（T9 主题在设备上），
-所以只能按名字里的标记判定：
+所以只能按名字里的标记判定，而且**先排除 26 键类**（排除优先于九宫匹配）：
 
 | 标记 | 作用 |
 | --- | --- |
+| 26 键排除：含 `letter` / `qwerty` / `26`，或以 `default` 开头 | 一律不显示符号（优先级最高） |
 | 九宫标记 `jiugong` / `bihua` / `t9` | 认定是九宫格布局，可以覆盖左列 |
 | 数字标记 `number` / `digit` / `numpad`（须先命中九宫标记） | 换成运算符集 |
 
+排除必须优先：主题是拿「回退到哪个键盘」给英文键盘命名的，于是 `default_jiugong_letter`
+这种 26 键 id 里带着 `jiugong` 字样。真机上按「中/En」切到英文 26 键后侧栏仍显示、
+挡住 `q/a/z` 一列，就是由这条排除规则修掉的（排除按整串判断，`qwerty_jiugong`、
+`jiugong_26` 之类同样被挡住）。
+
 于是 `luna_jiugong`、`luna_bihua`、`t9`、`t9_stroke` → 标点集；`jiugong_number` →
-运算符集；`default`、`qwerty`、`qwerty0`、`number`、`symbols` 等 → 不显示任何符号。
-主题若用别的命名（例如数字键盘不叫 `jiugong_number`），需要往 `SymbolKeyboardKind` 的
-`NINE_KEY_MARKERS` / `NUMBER_MARKERS` 里补一项。
+运算符集；`default`、`default_jiugong_letter`、`default_symbol`、`qwerty`、`qwerty0`、
+`letter`、`number`、`symbols` 等 → 不显示任何符号。主题若用别的命名（例如数字键盘不叫
+`jiugong_number`），需要往 `SymbolKeyboardKind` 的 `NINE_KEY_MARKERS` / `NUMBER_MARKERS`
+里补一项。
 
 诊断：侧栏每次判定结果变化都会打一行 Debug 日志
 
@@ -340,9 +347,13 @@ BUILD_ABI=arm64-v8a ./gradlew :app:assembleDebug
 6. 侧栏没有做长按「忘记该词」菜单（候选条有）。
 7. 已在 REDMI K80 上安装点按验收过一轮（发现「占列压键盘」与「续轮裸 comment 漏检」
    两个问题，即本分支最新的两个修复）；换主题/配色后叠加与配色的表现未逐一验证。
-8. **符号侧的键盘判定靠名字标记**（第 3.2 节）。主题若把九宫键盘命名成别的名字，侧栏
-   不会出现，需要在 `SymbolKeyboardKind` 里补标记；用 `adb logcat -s Trime` 里
-   `Sidebar: keyboard=...` 一行确认实际 id。
+8. **符号侧的键盘判定靠名字标记**（第 3.2 节），排除规则优先：id 含 `letter` /
+   `qwerty` / `26` 或以 `default` 开头的一律先排除，其余再按九宫标记判定。这条排除是
+   真机验收修出来的——主题的英文 26 键叫 `default_jiugong_letter`，名字里带着
+   `jiugong`，切到英文后侧栏挡住 `q/a/z`。反过来也有代价：主题若把**九宫**键盘命名成
+   `default_*`（例如 `default_jiugong`），侧栏会被排除掉，需要调整
+   `SymbolKeyboardKind.ALPHABET_MARKERS` / `ALPHABET_PREFIX`。用
+   `adb logcat -s Trime` 里 `Sidebar: keyboard=...` 一行确认实际 id。
 9. **符号集是写死的 8 项**（中文全角标点／算术符号），不随方案、主题或输入法语言变化；
    括号对靠 `KEYCODE_DPAD_LEFT` 定位光标，个别不接受方向键的编辑器会把光标留在右括号之后
    （文本仍正确上屏）。
