@@ -93,6 +93,24 @@ class SidebarGeometryTest :
             SidebarGeometry.column(gridOf(rows = 1), horizontalGap = 6, verticalGap = 12) shouldBe null
         }
 
+        "has no column when no key carries a size" {
+            SidebarGeometry.column(
+                gridOf().map { it.copy(width = 0, height = 0) },
+                horizontalGap = 6,
+                verticalGap = 12,
+            ) shouldBe null
+        }
+
+        "follows the rows the keyboard reports, even when they are not contiguous" {
+            val keys = gridOf(rows = 5).filter { it.row != 1 }
+
+            val bounds = SidebarGeometry.column(keys, horizontalGap = 0, verticalGap = 0)!!
+
+            bounds.rows shouldBe 3
+            bounds.top shouldBe 0
+            bounds.height shouldBe keys.filterNot { it.row == 4 }.maxOf { it.y + it.height }
+        }
+
         "has no column when the gaps swallow the keys" {
             SidebarGeometry.column(
                 gridOf(keyWidth = 6),

@@ -7,6 +7,7 @@ package com.osfans.trime.ime.candidates.sidebar
 
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Typeface
 import android.view.View
 import androidx.constraintlayout.widget.ConstraintLayout
 import com.osfans.trime.data.theme.Theme
@@ -26,6 +27,7 @@ import splitties.views.dsl.core.view
 import splitties.views.dsl.core.wrapContent
 import splitties.views.gravityCenter
 import splitties.views.horizontalPadding
+import timber.log.Timber
 
 /**
  * One symbol row of the sidebar: a single glyph, or a bracket pair, centred in
@@ -53,14 +55,25 @@ class SymbolItemUi(
 ) : Ui {
     private val theme: Theme get() = scope.theme
 
-    private val textColor: Int get() = scope.colors.keyTextColor
-    private val hlBackColor: Int get() = scope.colors.hilitedKeyBackColor
+    // a symbol row must not take the keyboard down for a colour or a font: the
+    // fallbacks only apply while the theme scope has nothing to give
+    private val textColor: Int get() = runCatching { scope.colors.keyTextColor }.getOrDefault(Color.WHITE)
+    private val hlBackColor: Int get() = runCatching { scope.colors.hilitedKeyBackColor }.getOrDefault(Color.TRANSPARENT)
+
+    /**
+     * The theme key font, or the platform default when the theme asks for a
+     * font the device does not have (resolving one reads the user data dir).
+     */
+    private fun keyTypeface(): Typeface =
+        runCatching { theme.fonts.key }
+            .onFailure { Timber.w(it, "Sidebar: cannot load the key font, using the default one") }
+            .getOrDefault(Typeface.DEFAULT)
 
     private val symbol =
         view(::AutoScaleTextView) {
             id = View.generateViewId()
             textSize = theme.style.keyTextSize.takeIf { it > 0f } ?: SYMBOL_SIZE_SP
-            typeface = theme.fonts.key
+            typeface = keyTypeface()
             isSingleLine = true
             gravity = gravityCenter
             scaleMode = AutoScaleTextView.Mode.Proportional

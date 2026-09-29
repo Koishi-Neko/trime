@@ -10,7 +10,6 @@ import android.view.ContextThemeWrapper
 import android.view.KeyEvent
 import android.view.View
 import androidx.constraintlayout.widget.ConstraintLayout
-import androidx.core.view.updateLayoutParams
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -86,6 +85,8 @@ class SidebarDelegate(override val di: DI) :
 
     private var lastLoggedState: String = ""
 
+    private var lastLoggedGeometry: String = ""
+
     private val adapter =
         SidebarViewAdapter(scope).apply {
             setOnItemClickListener { _, _, position ->
@@ -116,8 +117,21 @@ class SidebarDelegate(override val di: DI) :
                 defaultFocusHighlightEnabled = false
             }
             applyBackground(this)
-        }
+        }.also { it.addOnAttachStateChangeListener(columnBoundsListener) }
     }
+
+    /**
+     * The input view builds its children *after* the keyboard window has created
+     * the keyboard, and the keyboard announces itself right there — so the
+     * sidebar is told how big it should be before it has been put into a parent
+     * and has layout params. The bounds are kept and applied here instead.
+     */
+    private val columnBoundsListener =
+        object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) = applyBounds()
+
+            override fun onViewDetachedFromWindow(v: View) = Unit
+        }
 
     /**
      * Rime does not announce a keyboard switch, and the switch itself is
@@ -142,13 +156,35 @@ class SidebarDelegate(override val di: DI) :
         keyboardIdJob.cancel()
     }
 
+    /** Bounds of the column the keyboard in use gives the sidebar; null while unknown. */
+    private var columnBounds: SidebarBounds? = null
+        set(value) {
+            field = value
+            val height = value?.rowHeight ?: 0
+            if (adapter.rowHeight != height) {
+                adapter.rowHeight = height
+                rebindRows()
+            }
+            logGeometry(value)
+        }
+
     /**
      * Restyles after a scheme switch. Rows re-read their colors on the next
      * bind, so a plain refresh is enough to repaint the visible ones.
      */
     fun refreshColors() {
         applyBackground(view)
-        adapter.notifyDataSetChanged()
+        rebindRows()
+    }
+
+    /** Rebinds the visible rows; a list that is mid-layout is notified afterwards. */
+    private fun rebindRows() {
+        val list = view
+        if (list.isComputingLayout) {
+            list.post { adapter.notifyDataSetChanged() }
+        } else {
+            adapter.notifyDataSetChanged()
+        }
     }
 
     /**
@@ -158,13 +194,19 @@ class SidebarDelegate(override val di: DI) :
      * switch, when [refreshColors] runs.
      */
     private fun applyBackground(target: RecyclerView) {
-        target.background =
-            scope.decorDrawable(
-                "key_back_color",
-                "key_border_color",
-                context.dp(theme.style.keyBorder),
-                context.dp(theme.style.roundCorner).toFloat(),
-            )
+        val material =
+            runCatching {
+                scope.decorDrawable(
+                    "key_back_color",
+                    "key_border_color",
+                    context.dp(theme.style.keyBorder),
+                    context.dp(theme.style.roundCorner).toFloat(),
+                )
+            }.onFailure { Timber.w(it, "Sidebar: cannot resolve the key material for the column") }
+                .getOrNull()
+        // a theme that cannot supply the material leaves the column as it was
+        // rather than taking the keyboard down with it
+        if (material != null) target.background = material
     }
 
     /**
@@ -194,30 +236,59 @@ class SidebarDelegate(override val di: DI) :
     /**
      * Takes the bounds of the column the sidebar covers from the keyboard in
      * use: the drawn bounds of the leftmost key of every row but the bottom
-     * one. Tiling the rows inside it also gives the list its key row height,
-     * so three symbols fill the visible column and the rest scrolls.
+     * one. Tiling the rows inside it also gives the list its key row height, so
+     * three symbols fill the visible column and the rest scrolls.
      *
-     * Without a keyboard — before the first attach — nothing is applied and
-     * the view keeps the percentage fallback of its layout params.
+     * A keyboard that cannot be measured (no keys, a single row) leaves the
+     * bounds null and the view keeps the percentage fallback of its layout
+     * params, which is what the sidebar starts with.
      */
     private fun applyGeometry() {
-        val keyboard = keyboardWindow.attachedKeyboard ?: return
-        val bounds =
-            SidebarGeometry.column(
-                keys = keyboard.keys.map { SidebarKeyBounds(it.x, it.y, it.width, it.height, it.row) },
-                horizontalGap = keyboard.horizontalGap,
-                verticalGap = keyboard.verticalGap,
-            ) ?: return
-        view.updateLayoutParams<ConstraintLayout.LayoutParams> {
-            width = bounds.width
-            height = bounds.height
-            // the view is anchored below the bar and above the bottom padding:
-            // a top bias pins it to the first key row instead of centring it
-            verticalBias = 0f
-            topMargin = bounds.top
-            marginStart = bounds.left
-        }
-        adapter.rowHeight = bounds.rowHeight
+        val keyboard = keyboardWindow.attachedKeyboard
+        columnBounds =
+            keyboard?.let {
+                SidebarGeometry.column(
+                    keys = it.keys.map { key -> SidebarKeyBounds(key.x, key.y, key.width, key.height, key.row) },
+                    horizontalGap = it.horizontalGap,
+                    verticalGap = it.verticalGap,
+                )
+            }
+    }
+
+    /**
+     * Applies [columnBounds] to the view. The view is built before the input
+     * view puts it into a parent, so it may still have no layout params: there
+     * is nothing to update then, and [columnBoundsListener] applies the bounds
+     * once the view is attached.
+     */
+    private fun applyBounds() {
+        val bounds = columnBounds ?: return
+        val params = view.layoutParams as? ConstraintLayout.LayoutParams ?: return
+        params.width = bounds.width
+        params.height = bounds.height
+        // the view is anchored below the bar and above the bottom padding:
+        // a top bias pins it to the first key row instead of centring it
+        params.verticalBias = 0f
+        params.topMargin = bounds.top
+        params.marginStart = bounds.left
+        view.layoutParams = params
+    }
+
+    /**
+     * Logs the geometry changes. The keyboard id and the column it yields are
+     * the two things to check in logcat when the sidebar sits in the wrong
+     * place or keeps its fallback size.
+     */
+    private fun logGeometry(bounds: SidebarBounds?) {
+        val state =
+            if (bounds == null) {
+                "keyboard=$keyboardId column=unavailable (percent fallback)"
+            } else {
+                "keyboard=$keyboardId column=${bounds.left},${bounds.top} ${bounds.width}x${bounds.height} rows=${bounds.rows}"
+            }
+        if (state == lastLoggedGeometry) return
+        lastLoggedGeometry = state
+        Timber.d("Sidebar: %s", state)
     }
 
     private fun reevaluate() {

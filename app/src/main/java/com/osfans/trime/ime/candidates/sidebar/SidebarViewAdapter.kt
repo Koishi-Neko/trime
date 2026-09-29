@@ -30,16 +30,12 @@ class SidebarViewAdapter(
 
     /**
      * Height of one row in px, as the delegate reads it from the keyboard key
-     * rows. Rows tile the covered column with no margins, so the eight symbols
-     * show three at a time and the rest scrolls. Zero keeps the theme fallback,
-     * for a list that is shown before the first keyboard is measured.
+     * rows; the delegate rebinds the list when it changes. Rows tile the covered
+     * column with no margins, so the eight symbols show three at a time and the
+     * rest scrolls. Zero keeps the theme fallback, for a list that is shown
+     * before the first keyboard is measured.
      */
     var rowHeight: Int = 0
-        set(value) {
-            if (field == value) return
-            field = value
-            notifyDataSetChanged()
-        }
 
     fun updateEntries(
         entries: List<SidebarEntry>,
