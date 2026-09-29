@@ -26,6 +26,7 @@ class SidebarContentResolverTest :
                     composing = true,
                     keyboardKind = SymbolKeyboardKind.PUNCTUATION,
                     symbolsEnabled = true,
+                    keyboardOnScreen = true,
                 )
             entries shouldBe
                 listOf(
@@ -41,6 +42,7 @@ class SidebarContentResolverTest :
                     composing = false,
                     keyboardKind = SymbolKeyboardKind.PUNCTUATION,
                     symbolsEnabled = true,
+                    keyboardOnScreen = true,
                 )
             entries.map { (it as SidebarEntry.Symbol).text } shouldBe
                 listOf("，", "。", "？", "！", "、", "——", "（）", "【】")
@@ -53,6 +55,7 @@ class SidebarContentResolverTest :
                 composing = true,
                 keyboardKind = SymbolKeyboardKind.PUNCTUATION,
                 symbolsEnabled = true,
+                keyboardOnScreen = true,
             ).shouldBeEmpty()
         }
 
@@ -63,6 +66,7 @@ class SidebarContentResolverTest :
                     composing = false,
                     keyboardKind = SymbolKeyboardKind.OPERATORS,
                     symbolsEnabled = true,
+                    keyboardOnScreen = true,
                 )
             entries.map { (it as SidebarEntry.Symbol).text } shouldBe
                 listOf("+", "-", "*", "/", "=", "_", "（）", "【】")
@@ -75,6 +79,7 @@ class SidebarContentResolverTest :
                 composing = true,
                 keyboardKind = SymbolKeyboardKind.OPERATORS,
                 symbolsEnabled = true,
+                keyboardOnScreen = true,
             ).size shouldBe 8
         }
 
@@ -85,8 +90,37 @@ class SidebarContentResolverTest :
                     composing = composing,
                     keyboardKind = SymbolKeyboardKind.NONE,
                     symbolsEnabled = true,
+                    keyboardOnScreen = true,
                 ).shouldBeEmpty()
             }
+        }
+
+        "any window other than the keyboard hides the sidebar" {
+            // the liquid keyboard panel, a menu or the clipboard takes the
+            // keyboard area over: syllables are hidden just like the symbols
+            val syllables = listOf(syllable("zhe", "zhe'43", 0))
+            SidebarContentResolver.resolve(
+                syllables = syllables,
+                composing = true,
+                keyboardKind = SymbolKeyboardKind.PUNCTUATION,
+                symbolsEnabled = true,
+                keyboardOnScreen = false,
+            ).shouldBeEmpty()
+            SidebarContentResolver.resolve(
+                syllables = emptyList(),
+                composing = false,
+                keyboardKind = SymbolKeyboardKind.OPERATORS,
+                symbolsEnabled = true,
+                keyboardOnScreen = false,
+            ).shouldBeEmpty()
+            // and the ordinary rules apply again as soon as it is back
+            SidebarContentResolver.resolve(
+                syllables = syllables,
+                composing = true,
+                keyboardKind = SymbolKeyboardKind.PUNCTUATION,
+                symbolsEnabled = true,
+                keyboardOnScreen = true,
+            ) shouldBe listOf(SidebarEntry.Syllable("zhe", "zhe'43", 0))
         }
 
         "turning the switch off hides the symbols only" {
@@ -96,6 +130,7 @@ class SidebarContentResolverTest :
                     composing = false,
                     keyboardKind = SymbolKeyboardKind.PUNCTUATION,
                     symbolsEnabled = false,
+                    keyboardOnScreen = true,
                 )
             withoutSymbols.shouldBeEmpty()
             SidebarContentResolver.resolve(
@@ -103,6 +138,7 @@ class SidebarContentResolverTest :
                 composing = true,
                 keyboardKind = SymbolKeyboardKind.PUNCTUATION,
                 symbolsEnabled = false,
+                keyboardOnScreen = true,
             ) shouldBe listOf(SidebarEntry.Syllable("xie", "xie'6", 2))
         }
     })

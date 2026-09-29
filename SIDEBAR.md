@@ -93,20 +93,25 @@ comment 同形，靠结构规则（comment 必须等于 text 或以 `text'` 开�
 
 ### 3.1 显隐与内容（优先级即判定顺序）
 
+侧栏是键盘的装饰：**键盘区一旦被别的窗口顶替**（液体键盘／符号面板、菜单面板、剪贴板、
+分段、展开候选……），侧栏一律 `GONE`，这是最高优先级；回到主键盘后按下面的规则恢复，
+而且**几何不需要重新量**（bounds 仍在视图上，`GONE` 不改布局参数）。
+
 | 优先级 | 条件 | 侧栏内容 |
 | --- | --- | --- |
+| 0 | 键盘区被其它窗口占用（活动窗口不是主键盘） | 不显示（`GONE`） |
 | 1 | 有音节候选（第 2 节） | 音节候选列表，行为与加符号集之前**完全一致** |
 | 2 | 未组字，且当前是九宫主键盘 | 标点集：`，` `。` `？` `！` `、` `——` `（）` `【】` |
 | 3 | 当前是九宫数字键盘 | 运算符集：`+` `-` `*` `/` `=` `_` `（）` `【】` |
 | 4 | 组字中但没有音节候选 | 不显示（`GONE`），露出主题左列的 分词/上页/下页/Esc 等功能键 |
-| 5 | 其它键盘（`default`、`qwerty` 等 26 键） | 永不显示符号 —— 17% 的叠加会挡住 `q/a/z` |
+| 5 | 其它键盘（`default`、`qwerty` 等 26 键） | 永不显示符号 —— 叠加会挡住 `q/a/z` 那一列 |
 
 规则 2 在组字期间让位，因为那时九宫主键盘左列是功能键；规则 3 不附加组字条件，数字键盘
 的按键直接上屏、左列本来就不是功能键。判定是一个纯函数
-`SidebarContentResolver.resolve()`（输入：音节候选、是否组字、键盘种类、符号开关），
-不碰 Android API，单测全覆盖。
+`SidebarContentResolver.resolve()`（输入：音节候选、是否组字、键盘种类、符号开关、
+主键盘是否在屏），不碰 Android API，单测全覆盖。
 
-判定需要的两个输入是这么拿到的：
+判定需要的三个输入是这么拿到的：
 
 - **是否组字**：`rime.run { statusCached.isComposing }`（与 `InputView.broadcastKeyAppearanceUpdate()`
   同源），在候选 / composition / 键盘外观任一广播之后重新求值；
@@ -115,7 +120,13 @@ comment 同形，靠结构规则（comment 必须等于 text 或以 `text'` 开�
   而且 `switchKeyboard()` 本身还要 post 到主线程），所以不能只在广播里读；`KeyboardWindow`
   在 `attachKeyboard()` 把 id 发进一个 `replay = 1` 的 `SharedFlow`（`currentKeyboardId`），
   侧栏订阅它来重新求值。这是本次对 `KeyboardWindow` 的唯一改动（另有私有字段
-  `currentKeyboardId` 改名 `keyboardId`，免得与新 flow 重名）。
+  `currentKeyboardId` 改名 `keyboardId`，免得与新 flow 重名）；
+- **键盘区是不是还归主键盘**：`BoardWindowManager.isAttached(keyboardWindow)` 现拉（不缓存）。
+  所有顶替键盘区的窗口——液体键盘面板（「符」键/剪贴板/任何 tab）、`SwitchOptionWindow`
+  菜单、`ClipboardWindow`、`SegmentsWindow`、`FlexboxUnrolledCandidateWindow`——**都**走
+  `windowManager.attachWindow()`，而它每次都会 `broadcaster.onWindowAttached/Detached()`；
+  侧栏实现这两个广播做**触发**、判定本身用 `isAttached` 现拉，因此不受 attach/detach 顺序
+  影响，也不会过期。
 
 ### 3.2 键盘 id 的判定方式（重要限制）
 
@@ -321,7 +332,8 @@ BUILD_ABI=arm64-v8a ./gradlew :app:assembleDebug
 - 构建日志中不出现 `configureCMake` / `buildCMake`（prebuilt native 路径生效）。
 - 单测：`SyllableCandidateDetectorTest`（7 例）、`SyllableCandidateSplitTest`（4 例）、
   `SymbolSetsTest`（4 例）、`SymbolKeyboardKindTest`（6 例）、`SidebarContentResolverTest`
-  （7 例）、`SidebarGeometryTest`（10 例）；全部 **378** 个用例通过，0 失败。
+  （8 例）、`SidebarGeometryTest`（12 例）、`ShiyinThemeGeometryTest`（5 例，真实主题）；
+  全部 **386** 个用例通过，0 失败。
 - 产物里只有 `lib/arm64-v8a/librime_jni.so` 一个 native 库。
 
 单测覆盖：
@@ -337,11 +349,16 @@ BUILD_ABI=arm64-v8a ./gradlew :app:assembleDebug
   `jiugong_number` / `t9_numpad` → 运算符，`default` / `qwerty` / `qwerty0` / `number` /
   `symbols` / 空串 → 不显示，大小写无关；
 - 符号集内容与顺序：各 8 项、`（）` 与 `【】` 的 `cursorBack = 1`、其余为 0；
-- 显隐优先级：音节候选优先、九宫主键盘未组字→标点、组字中→空、九宫数字键盘→运算符
-  （组字中也显示）、其它键盘→空、开关关掉→空（音节行不受影响）；
+- 显隐优先级：**键盘区被其它窗口占用→空（音节行同样隐藏）**、音节候选优先、九宫主键盘
+  未组字→标点、组字中→空、九宫数字键盘→运算符（组字中也显示）、其它键盘→空、
+  开关关掉→空（音节行不受影响）；
 - 几何：4 行键盘覆盖上面 3 行、底行剩余高度不计入、宽度取左列最宽的键、左右上下各内缩
-  半个 gap、左列不从 0 开始时跟着平移、行高 = 列高/行数、空键盘 / 只有一行 /
-  间距大于键尺寸时返回 null（回退到百分比）。
+  半个 gap、左列不从 0 开始时跟着平移、行号不连续也能处理、行高 = 列高/行数、
+  空键盘 / 只有一行 / 零尺寸键 / 间距大于键尺寸时返回 null（回退到百分比）；
+- 真实主题（`ShiyinThemeGeometryTest`，需要 `SHIYIN_THEME` 或仓库外的固定路径，缺失时跳过）：
+  解码整份主题不抛异常，`luna_jiugong` / `luna_bihua` / `jiugong_number` 均得到
+  `left=3, top=3, 161×510, rows=3`（15.5% × 1080 − 6 横向 gap、3 × 172 − 6），
+  主题里所有 58 个有键的键盘喂进 `column()` 都不抛异常且只返回合理 bounds 或 null。
 
 ---
 
@@ -393,6 +410,10 @@ BUILD_ABI=arm64-v8a ./gradlew :app:assembleDebug
    `SidebarDelegate.applyBackground()` 里直接取该键的 `getBackgroundDrawable()`。
 14. **横屏 / 分屏键盘未验证**：几何是按 `row` 与键框算的，理论上前者不需要改；但横屏主题常
    用 `landscape_keyboard`/`split_space_percent`，侧栏是否落在正确的一列没有实测。
+15. **窗口隐藏靠 `BoardWindowManager` 的广播与 `isAttached()`**（第 3.1 节）。任何**不**走
+   `windowManager.attachWindow()` 就抢占键盘区的界面（例如自己改可见性/叠加视图的窗口）不会
+   让侧栏隐藏，需要把它接进窗口管理器；反之若某个窗口在键盘区之上但只是临时浮层（popup、
+   预编辑），侧栏不会为它让位。从面板返回主键盘时几何沿用既有 bounds，键盘未重建就无需重算。
 
 ---
 

@@ -27,6 +27,8 @@ import com.osfans.trime.ime.candidates.syllable.SyllableCandidateRules
 import com.osfans.trime.ime.candidates.symbol.SymbolKeyboardKind
 import com.osfans.trime.ime.core.TrimeInputMethodService
 import com.osfans.trime.ime.keyboard.KeyboardWindow
+import com.osfans.trime.ime.window.BoardWindow
+import com.osfans.trime.ime.window.BoardWindowManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.kodein.di.DI
@@ -69,6 +71,7 @@ class SidebarDelegate(override val di: DI) :
     private val scope: ThemeScope by instance()
     private val service: TrimeInputMethodService by instance()
     private val keyboardWindow: KeyboardWindow by instance()
+    private val windowManager: BoardWindowManager by instance()
 
     private val prefs by lazy { AppPrefs.defaultInstance().candidates }
 
@@ -82,6 +85,9 @@ class SidebarDelegate(override val di: DI) :
 
     /** Theme id of the keyboard in use; empty until the first one is attached. */
     private var keyboardId: String = ""
+
+    /** The window the manager last put on screen, for the log line only. */
+    private var attachedWindow: BoardWindow? = null
 
     private var lastLoggedState: String = ""
 
@@ -299,11 +305,20 @@ class SidebarDelegate(override val di: DI) :
                 composing = composing,
                 keyboardKind = SymbolKeyboardKind.of(keyboardId),
                 symbolsEnabled = prefs.symbolSidebar.getValue(),
+                keyboardOnScreen = keyboardOnScreen(),
             )
         adapter.updateEntries(entries, highlighted)
         view.visibility = if (entries.isEmpty()) View.GONE else View.VISIBLE
         logDecision(composing, entries)
     }
+
+    /**
+     * Whether the keyboard is the window on screen. Pulled from the window
+     * manager instead of tracked from the broadcasts, so the answer cannot go
+     * stale: the keyboard area is shared by the keyboard, the liquid keyboard
+     * panel, the menus and the clipboard.
+     */
+    private fun keyboardOnScreen(): Boolean = runCatching { windowManager.isAttached(keyboardWindow) }.getOrDefault(true)
 
     /**
      * Logs only the decisions that change. The theme id of the keyboard is the
@@ -314,10 +329,23 @@ class SidebarDelegate(override val di: DI) :
         composing: Boolean,
         entries: List<SidebarEntry>,
     ) {
-        val state = "keyboard=$keyboardId composing=$composing entries=${entries.size}"
+        val state =
+            "keyboard=$keyboardId window=${attachedWindow?.javaClass?.simpleName ?: "none"} " +
+                "composing=$composing entries=${entries.size}"
         if (state == lastLoggedState) return
         lastLoggedState = state
         Timber.d("Sidebar: $state")
+    }
+
+    override fun onWindowAttached(window: BoardWindow) {
+        attachedWindow = window
+        // a panel replaced the keyboard: the sidebar belongs to the keyboard
+        reevaluate()
+    }
+
+    override fun onWindowDetached(window: BoardWindow) {
+        // the next window announces itself right after this
+        reevaluate()
     }
 
     override fun onCandidateListUpdate(data: Candidates.Bulk) {

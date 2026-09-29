@@ -10,7 +10,10 @@ import com.osfans.trime.ime.candidates.symbol.SymbolKeyboardKind
 import com.osfans.trime.ime.candidates.symbol.SymbolSets
 
 /**
- * Decides what the sidebar shows, in priority order:
+ * Decides what the sidebar shows, in priority order. Nothing at all is shown
+ * unless the keyboard window is the one on screen: the sidebar decorates the
+ * keyboard, and another window (the liquid keyboard panel, a menu, the
+ * clipboard, …) takes that area over completely.
  *
  * 1. syllable candidates — the behaviour that predates the symbol sets: while
  *    a T9 scheme has syllables to offer, they own the sidebar;
@@ -35,7 +38,10 @@ object SidebarContentResolver {
         composing: Boolean,
         keyboardKind: SymbolKeyboardKind,
         symbolsEnabled: Boolean,
+        keyboardOnScreen: Boolean,
     ): List<SidebarEntry> {
+        // the keyboard area belongs to another window while this is false
+        if (!keyboardOnScreen) return emptyList()
         if (syllables.isNotEmpty()) {
             return syllables.map { SidebarEntry.Syllable(it.text, it.comment, it.globalIndex) }
         }
